@@ -1,0 +1,20 @@
+# MediaForge Python Backend Dependencies
+
+# AI Background Removal
+rembg>=2.0.50
+
+# Image Processing
+Pillow>=10.0.0
+
+# Video Processing
+opencv-python>=4.8.0
+
+# GPU Acceleration (choose one based on hardware)
+# For NVIDIA GPU:
+# onnxruntime-gpu>=1.15.0
+
+# For AMD/Intel GPU (Windows):
+# onnxruntime-directml>=1.15.0
+
+# For CPU only:
+onnxruntime>=1.15.0
