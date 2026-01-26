@@ -2,7 +2,7 @@
 
 A modern, cross-platform media processing toolkit built with Tauri 2.0 + React + Python.
 
-![MediaForge](https://img.shields.io/badge/version-2.0.0-blue)
+![MediaForge](https://img.shields.io/badge/version-0.1.0-blue)
 ![Tauri](https://img.shields.io/badge/Tauri-2.0-orange)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
