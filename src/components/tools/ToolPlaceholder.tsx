@@ -13,6 +13,7 @@ export const ToolPlaceholder: React.FC<ToolPlaceholderProps> = ({ toolKey }) => 
     const toolNameKeys: Record<ToolKey, string> = {
         'background-remover': 'tools.background_remover',
         'image-resizer': 'tools.image_resizer',
+        'image-stitcher': 'tools.image_stitcher',
         'format-converter': 'tools.format_converter',
         'video-to-frames': 'tools.video_to_frames',
         'video-to-gif': 'tools.video_to_gif',

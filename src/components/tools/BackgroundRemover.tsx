@@ -8,7 +8,6 @@ import { motion } from 'framer-motion';
 import { open } from '@tauri-apps/plugin-dialog';
 import {
     Upload,
-    Download,
     Trash2,
     Loader2,
     Check,
@@ -42,7 +41,6 @@ export const BackgroundRemover: React.FC = () => {
     // State
     const [mode, setMode] = useState<Mode>('ai');
     const [inputPath, setInputPath] = useState<string>('');
-    const [outputDir, setOutputDir] = useState<string>('');
     const [selectedModel, setSelectedModel] = useState<string>('u2net');
     const [alphaMatting, setAlphaMatting] = useState<boolean>(false);
     const [isProcessing, setIsProcessing] = useState<boolean>(false);
@@ -85,27 +83,15 @@ export const BackgroundRemover: React.FC = () => {
         }
     }, [mode, selectedModel]);
 
-    // Select output directory
-    const handleSelectOutputDir = useCallback(async () => {
-        try {
-            const dir = await open({
-                directory: true,
-            });
-            if (dir) {
-                setOutputDir(dir);
-            }
-        } catch (e) {
-            console.error('Directory selection error:', e);
-        }
-    }, []);
+
 
     // Open models directory
     const handleOpenModelsDir = useCallback(async () => {
         try {
             const dir = await getModelsDir();
             // Use shell to open directory
-            const { open: shellOpen } = await import('@tauri-apps/plugin-opener');
-            await shellOpen(dir);
+            const opener = await import('@tauri-apps/plugin-opener');
+            await (opener as any).open(dir);
         } catch (e) {
             console.error('Failed to open models dir:', e);
         }
@@ -369,7 +355,7 @@ export const BackgroundRemover: React.FC = () => {
                     <div className="flex gap-3 pt-4">
                         <button
                             onClick={handleProcess}
-                            disabled={!inputPath || isProcessing || (mode === 'ai' && modelStatus && !modelStatus.available)}
+                            disabled={!inputPath || isProcessing || (mode === 'ai' && !!modelStatus && !modelStatus.available)}
                             className={cn(
                                 'flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg font-medium transition-all',
                                 'bg-primary text-primary-foreground hover:bg-primary/90',
