@@ -59,9 +59,8 @@ impl PythonManager {
     }
 
     /// Get the path to the Python executable
-    fn get_python_path() -> PathBuf {
+    fn get_python_path(resource_dir: Option<&PathBuf>) -> PathBuf {
         // For development, use the virtual environment Python
-        // For production, use embedded Python
         if cfg!(debug_assertions) {
             // Get project root for venv path
             let exe_dir = std::env::current_exe()
@@ -92,22 +91,34 @@ impl PythonManager {
             log::warn!("Virtual environment not found, using system Python");
             PathBuf::from("python")
         } else {
-            let exe_dir = std::env::current_exe()
-                .ok()
-                .and_then(|p| p.parent().map(|p| p.to_path_buf()))
-                .unwrap_or_default();
-            exe_dir.join("resources").join("python").join("python.exe")
+            // In release, use the bundled resource path if available
+            if let Some(resource_path) = resource_dir {
+                resource_path
+                    .join("python_dist")
+                    .join("python")
+                    .join("python.exe")
+            } else {
+                // Fallback to old behavior (should not happen if initialized correctly)
+                let exe_dir = std::env::current_exe()
+                    .ok()
+                    .and_then(|p| p.parent().map(|p| p.to_path_buf()))
+                    .unwrap_or_default();
+                exe_dir
+                    .join("python_dist")
+                    .join("python")
+                    .join("python.exe")
+            }
         }
     }
 
     /// Get the path to the Python backend script
-    fn get_backend_path() -> PathBuf {
-        let exe_dir = std::env::current_exe()
-            .ok()
-            .and_then(|p| p.parent().map(|p| p.to_path_buf()))
-            .unwrap_or_default();
-
+    fn get_backend_path(resource_dir: Option<&PathBuf>) -> PathBuf {
         if cfg!(debug_assertions) {
+            let exe_dir = std::env::current_exe()
+                .ok()
+                .and_then(|p| p.parent().map(|p| p.to_path_buf()))
+                .unwrap_or_default();
+
             // Development: exe is at src-tauri/target/debug/mediaforge.exe
             // We need to go up to src-tauri, then to project root
             exe_dir
@@ -117,12 +128,23 @@ impl PythonManager {
                 .map(|p| p.join("python_backend").join("main.py"))
                 .unwrap_or_else(|| PathBuf::from("python_backend/main.py"))
         } else {
-            exe_dir.join("resources").join("backend").join("main.py")
+            if let Some(resource_path) = resource_dir {
+                resource_path
+                    .join("python_dist")
+                    .join("backend")
+                    .join("main.py")
+            } else {
+                let exe_dir = std::env::current_exe()
+                    .ok()
+                    .and_then(|p| p.parent().map(|p| p.to_path_buf()))
+                    .unwrap_or_default();
+                exe_dir.join("python_dist").join("backend").join("main.py")
+            }
         }
     }
 
     /// Start the Python backend process
-    pub fn start(&self) -> Result<(), PythonError> {
+    pub fn start(&self, resource_dir: Option<PathBuf>) -> Result<(), PythonError> {
         // Atomic guard: try to claim the starting flag
         // compare_exchange_weak: if false, set to true and proceed; if true, someone else is starting
         if self
@@ -151,8 +173,8 @@ impl PythonManager {
             }
         }
 
-        let python_path = Self::get_python_path();
-        let backend_path = Self::get_backend_path();
+        let python_path = Self::get_python_path(resource_dir.as_ref());
+        let backend_path = Self::get_backend_path(resource_dir.as_ref());
 
         log::info!(
             "Starting Python backend: {:?} {:?}",

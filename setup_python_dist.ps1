@@ -8,7 +8,7 @@ $projectRoot = $scriptDir
 # Configuration
 $pythonVersion = "3.12.1"
 $pythonUrl = "https://www.python.org/ftp/python/$pythonVersion/python-$pythonVersion-embed-amd64.zip"
-$distDir = Join-Path $projectRoot "python_dist"
+$distDir = Join-Path $projectRoot "src-tauri\python_dist"
 $pythonDir = Join-Path $distDir "python"
 $backendDir = Join-Path $distDir "backend"
 $backendSource = Join-Path $projectRoot "python_backend"

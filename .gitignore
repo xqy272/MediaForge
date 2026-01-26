@@ -9,6 +9,7 @@ python_backend/.venv/
 # Build outputs
 # =========================
 dist/
+python_dist/
 dist-ssr/
 src-tauri/target/
 src-tauri/gen/schemas/
