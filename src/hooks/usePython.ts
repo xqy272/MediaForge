@@ -37,9 +37,23 @@ export function usePython(): UsePythonResult {
                 await initPython();
 
                 // Check if Python is running
-                const status = await getPythonStatus();
+                // Check if Python is running (with polling for race conditions)
+                let isRunning = false;
+                let attempts = 0;
+
+                while (attempts < 20 && mounted) {
+                    const status = await getPythonStatus();
+                    if (status.running) {
+                        isRunning = true;
+                        break;
+                    }
+                    // Wait 500ms before retry
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                    attempts++;
+                }
+
                 if (mounted) {
-                    setIsReady(status.running);
+                    setIsReady(isRunning);
                     setError(null);
                 }
 

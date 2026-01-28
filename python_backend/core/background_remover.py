@@ -10,6 +10,61 @@ from PIL import Image
 import io
 
 
+
+class RMBGSession:
+    """Session handler for RMBG-2.0 ONNX model"""
+    
+    def __init__(self, model_path: str, providers: List[str]):
+        import onnxruntime as ort
+        self.session = ort.InferenceSession(model_path, providers=providers)
+        
+    def process(self, image: Image.Image) -> Image.Image:
+        """
+        Process image with RMBG-2.0
+        Ref: https://huggingface.co/briaai/RMBG-2.0
+        """
+        import numpy as np
+        
+        # 1. Preprocessing
+        orig_size = image.size
+        model_input_size = (1024, 1024)
+        
+        # Resize
+        img_resized = image.resize(model_input_size, Image.BILINEAR)
+        
+        # Convert to RGB if needed
+        if img_resized.mode != 'RGB':
+            img_resized = img_resized.convert('RGB')
+            
+        # Normalize (ImageNet)
+        img_np = np.array(img_resized).astype(np.float32) / 255.0
+        img_np = (img_np - [0.485, 0.456, 0.406]) / [0.229, 0.224, 0.225]
+        
+        # CHW format and batch dimension
+        img_input = img_np.transpose(2, 0, 1)
+        img_input = img_input[np.newaxis, ...]
+        
+        # 2. Inference
+        input_name = self.session.get_inputs()[0].name
+        output = self.session.run(None, {input_name: img_input})
+        
+        # 3. Postprocessing
+        mask = output[0][0][0]  # Get the mask (1024, 1024)
+        
+        # Normalize mask to 0-255 uint8
+        mask = (mask * 255).clip(0, 255).astype(np.uint8)
+        
+        # Resize mask back to original size
+        mask_img = Image.fromarray(mask, mode='L')
+        mask_img = mask_img.resize(orig_size, Image.BILINEAR)
+        
+        # Apply mask to original image
+        result = image.convert('RGBA')
+        result.putalpha(mask_img)
+        
+        return result
+
+
 class BackgroundRemover:
     """背景移除器 - 支持 CUDA 和 DirectML GPU 加速"""
     
@@ -65,11 +120,20 @@ class BackgroundRemover:
                 log_callback(f"Loading model: {self.model_name}")
                 log_callback(f"Using: {self._provider_info}")
             
-            from rembg import new_session
+            if self.model_name == 'RMBG-2.0':
+                from ..utils.portable import get_models_dir
+                model_path = get_models_dir() / f"{self.model_name}.onnx"
+                if not model_path.exists():
+                     raise FileNotFoundError(f"Model {self.model_name} not found locally")
+                
+                self.session = RMBGSession(str(model_path), providers)
+            else:
+                from rembg import new_session
+                
+                # rembg 会自动使用最佳可用的提供者
+                # 但我们可以通过环境变量影响 onnxruntime 的选择
+                self.session = new_session(self.model_name)
             
-            # rembg 会自动使用最佳可用的提供者
-            # 但我们可以通过环境变量影响 onnxruntime 的选择
-            self.session = new_session(self.model_name)
             self._is_loaded = True
             
             if progress_callback:
@@ -130,8 +194,12 @@ class BackgroundRemover:
             PIL Image: 移除背景后的图像（RGBA模式）
         """
         if not self._is_loaded:
-            self.load_model()
+            if not self.load_model():
+                raise RuntimeError(f"Failed to load model: {self.model_name}")
         
+        if self.model_name == 'RMBG-2.0':
+            return self.session.process(image)
+
         from rembg import remove
         
         result = remove(

@@ -77,6 +77,7 @@ MODEL_URLS = {
     'isnet-general-use': 'https://github.com/danielgatis/rembg/releases/download/v0.0.0/isnet-general-use.onnx',
     'isnet-anime': 'https://github.com/danielgatis/rembg/releases/download/v0.0.0/isnet-anime.onnx',
     'silueta': 'https://github.com/danielgatis/rembg/releases/download/v0.0.0/silueta.onnx',
+    'RMBG-2.0': 'https://huggingface.co/briaai/RMBG-2.0/resolve/main/onnx/model.onnx',
 }
 
 

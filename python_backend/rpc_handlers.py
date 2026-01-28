@@ -208,8 +208,8 @@ def rpc_chroma_key(
             target_color=target,
             auto_detect=auto_detect,
             hue_tolerance=hue_tolerance,
-            saturation_tolerance=saturation_tolerance,
-            value_tolerance=value_tolerance,
+            sat_threshold=saturation_tolerance,
+            val_threshold=value_tolerance,
             **kwargs
         )
         

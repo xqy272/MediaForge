@@ -59,6 +59,7 @@ export const BackgroundRemover: React.FC = () => {
         { id: 'isnet-general-use', name: 'ISNet (General)', size: '175MB' },
         { id: 'isnet-anime', name: 'ISNet Anime', size: '175MB' },
         { id: 'silueta', name: 'Silueta (Portrait)', size: '43MB' },
+        { id: 'RMBG-2.0', name: 'RMBG-2.0 (BiRefNet)', size: '300MB' },
     ];
 
     // Select input file
