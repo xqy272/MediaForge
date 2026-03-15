@@ -91,23 +91,28 @@ impl PythonManager {
             log::warn!("Virtual environment not found, using system Python");
             PathBuf::from("python")
         } else {
-            // In release, use the bundled resource path if available
-            if let Some(resource_path) = resource_dir {
-                resource_path
+            // Release: try exe directory first, then resource_dir
+            let candidates = Self::get_candidate_dirs(resource_dir);
+            for base in &candidates {
+                let python = base
                     .join("python_dist")
                     .join("python")
-                    .join("python.exe")
-            } else {
-                // Fallback to old behavior (should not happen if initialized correctly)
-                let exe_dir = std::env::current_exe()
-                    .ok()
-                    .and_then(|p| p.parent().map(|p| p.to_path_buf()))
-                    .unwrap_or_default();
-                exe_dir
-                    .join("python_dist")
-                    .join("python")
-                    .join("python.exe")
+                    .join("python.exe");
+                if python.exists() {
+                    log::info!("Found Python at: {:?}", python);
+                    return python;
+                }
             }
+            // Fallback (will fail but provides a meaningful error)
+            let fallback = candidates
+                .first()
+                .cloned()
+                .unwrap_or_default()
+                .join("python_dist")
+                .join("python")
+                .join("python.exe");
+            log::error!("Python not found! Candidates: {:?}", candidates);
+            fallback
         }
     }
 
@@ -128,19 +133,49 @@ impl PythonManager {
                 .map(|p| p.join("python_backend").join("main.py"))
                 .unwrap_or_else(|| PathBuf::from("python_backend/main.py"))
         } else {
-            if let Some(resource_path) = resource_dir {
-                resource_path
+            let candidates = Self::get_candidate_dirs(resource_dir);
+            for base in &candidates {
+                let main_py = base
                     .join("python_dist")
                     .join("backend")
-                    .join("main.py")
-            } else {
-                let exe_dir = std::env::current_exe()
-                    .ok()
-                    .and_then(|p| p.parent().map(|p| p.to_path_buf()))
-                    .unwrap_or_default();
-                exe_dir.join("python_dist").join("backend").join("main.py")
+                    .join("main.py");
+                if main_py.exists() {
+                    log::info!("Found backend at: {:?}", main_py);
+                    return main_py;
+                }
+            }
+            let fallback = candidates
+                .first()
+                .cloned()
+                .unwrap_or_default()
+                .join("python_dist")
+                .join("backend")
+                .join("main.py");
+            log::error!("Backend not found! Candidates: {:?}", candidates);
+            fallback
+        }
+    }
+
+    /// Get candidate base directories to search for python_dist
+    fn get_candidate_dirs(resource_dir: Option<&PathBuf>) -> Vec<PathBuf> {
+        let mut dirs = Vec::new();
+
+        // 1. Exe directory (MSI installs python_dist next to exe)
+        if let Some(exe_dir) = std::env::current_exe()
+            .ok()
+            .and_then(|p| p.parent().map(|p| p.to_path_buf()))
+        {
+            dirs.push(exe_dir);
+        }
+
+        // 2. Resource directory (Tauri resource_dir)
+        if let Some(rd) = resource_dir {
+            if !dirs.contains(rd) {
+                dirs.push(rd.clone());
             }
         }
+
+        dirs
     }
 
     /// Start the Python backend process
@@ -183,6 +218,26 @@ impl PythonManager {
         );
 
         let mut cmd = Command::new(&python_path);
+
+        // Add python_dist directories to PATH so native extensions (cv2, numpy)
+        // can find their DLL dependencies in the bundled environment
+        if let Some(python_dir) = python_path.parent() {
+            let current_path = std::env::var("PATH").unwrap_or_default();
+            let mut new_path = format!("{}", python_dir.display());
+
+            // Also add cv2 directory for opencv_videoio_ffmpeg DLL
+            let cv2_dir = python_dir
+                .join("Lib")
+                .join("site-packages")
+                .join("cv2");
+            if cv2_dir.exists() {
+                new_path = format!("{};{}", new_path, cv2_dir.display());
+            }
+
+            new_path = format!("{};{}", new_path, current_path);
+            cmd.env("PATH", new_path);
+        }
+
         cmd.arg(&backend_path)
             .env("MEDIAFORGE_PARENT_PID", std::process::id().to_string())
             .env("MEDIAFORGE_PORTABLE", "1")

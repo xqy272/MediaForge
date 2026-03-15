@@ -23,6 +23,27 @@ backend_dir = os.path.dirname(os.path.abspath(__file__))
 if backend_dir not in sys.path:
     sys.path.insert(0, backend_dir)
 
+# Pre-add DLL directories for native extensions (cv2, numpy) on Windows
+# This is needed for bundled/embedded Python where DLL search paths
+# may not include the package directories
+if sys.platform == 'win32':
+    try:
+        python_dir = os.path.dirname(sys.executable)
+        site_packages = os.path.join(python_dir, 'Lib', 'site-packages')
+        # Add python root dir for vcruntime DLLs
+        if os.path.isdir(python_dir):
+            os.add_dll_directory(python_dir)
+        # Add cv2 dir for opencv FFmpeg DLL
+        cv2_dir = os.path.join(site_packages, 'cv2')
+        if os.path.isdir(cv2_dir):
+            os.add_dll_directory(cv2_dir)
+        # Add numpy.libs if exists
+        numpy_libs = os.path.join(site_packages, 'numpy.libs')
+        if os.path.isdir(numpy_libs):
+            os.add_dll_directory(numpy_libs)
+    except Exception:
+        pass  # os.add_dll_directory not available on older Python
+
 # Import and start watchdog first
 import watchdog
 

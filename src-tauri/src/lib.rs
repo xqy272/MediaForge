@@ -65,6 +65,89 @@ fn stop_python(state: State<'_, AppState>) {
     state.python.stop();
 }
 
+/// Get models directory path (works without Python)
+#[tauri::command]
+fn get_models_dir(app: tauri::AppHandle) -> Result<String, String> {
+    let models_dir = resolve_models_dir(&app);
+
+    // Ensure directory exists
+    if let Err(e) = std::fs::create_dir_all(&models_dir) {
+        return Err(format!("Failed to create models directory: {}", e));
+    }
+
+    Ok(models_dir.to_string_lossy().to_string())
+}
+
+/// Open models directory in system file explorer
+#[tauri::command]
+fn open_models_dir(app: tauri::AppHandle) -> Result<(), String> {
+    let models_dir = resolve_models_dir(&app);
+
+    // Ensure directory exists
+    std::fs::create_dir_all(&models_dir)
+        .map_err(|e| format!("Failed to create models directory: {}", e))?;
+
+    #[cfg(target_os = "windows")]
+    {
+        std::process::Command::new("explorer")
+            .arg(models_dir.as_os_str())
+            .spawn()
+            .map_err(|e| format!("Failed to open directory: {}", e))?;
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("open")
+            .arg(&models_dir)
+            .spawn()
+            .map_err(|e| format!("Failed to open directory: {}", e))?;
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        std::process::Command::new("xdg-open")
+            .arg(&models_dir)
+            .spawn()
+            .map_err(|e| format!("Failed to open directory: {}", e))?;
+    }
+
+    Ok(())
+}
+
+fn resolve_models_dir(_app: &tauri::AppHandle) -> std::path::PathBuf {
+    if cfg!(debug_assertions) {
+        let exe_dir = std::env::current_exe()
+            .ok()
+            .and_then(|p| p.parent().map(|p| p.to_path_buf()))
+            .unwrap_or_default();
+        exe_dir
+            .parent()
+            .and_then(|p| p.parent())
+            .and_then(|p| p.parent())
+            .map(|p| p.join("models"))
+            .unwrap_or_else(|| std::path::PathBuf::from("models"))
+    } else {
+        // Release: try exe dir first, fall back to LOCALAPPDATA
+        let exe_dir = std::env::current_exe()
+            .ok()
+            .and_then(|p| p.parent().map(|p| p.to_path_buf()))
+            .unwrap_or_default();
+        let candidate = exe_dir.join("models");
+
+        // Check if exe dir is writable (e.g. not in Program Files)
+        if std::fs::create_dir_all(&candidate).is_ok() {
+            candidate
+        } else {
+            // Use LOCALAPPDATA/MediaForge/models
+            let local_app_data = std::env::var("LOCALAPPDATA")
+                .unwrap_or_else(|_| String::from("."));
+            std::path::PathBuf::from(local_app_data)
+                .join("MediaForge")
+                .join("models")
+        }
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     // Initialize logger
@@ -105,6 +188,8 @@ pub fn run() {
             python_call,
             python_status,
             stop_python,
+            get_models_dir,
+            open_models_dir,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

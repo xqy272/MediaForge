@@ -21,18 +21,52 @@ def get_app_dir() -> Path:
         return Path(__file__).parent.parent
 
 
+def get_data_dir() -> Path:
+    """
+    Get the writable data directory for models, config, and logs.
+    
+    In development or truly portable mode (app dir is writable), use app dir.
+    In installed mode (e.g. Program Files), use LOCALAPPDATA/MediaForge.
+    """
+    app_dir = get_app_dir()
+    
+    # Check if MEDIAFORGE_DATA_DIR is explicitly set
+    data_dir_env = os.environ.get('MEDIAFORGE_DATA_DIR')
+    if data_dir_env:
+        return Path(data_dir_env)
+    
+    # Check if the app directory is writable
+    test_dir = app_dir / 'models'
+    try:
+        test_dir.mkdir(parents=True, exist_ok=True)
+        # Try creating a temp file to verify write access
+        test_file = test_dir / '.write_test'
+        test_file.write_text('test')
+        test_file.unlink()
+        return app_dir
+    except (PermissionError, OSError):
+        pass
+    
+    # Fall back to LOCALAPPDATA/MediaForge (Windows)
+    if sys.platform == 'win32':
+        local_app_data = os.environ.get('LOCALAPPDATA')
+        if local_app_data:
+            return Path(local_app_data) / 'MediaForge'
+    
+    # Unix fallback
+    return Path.home() / '.mediaforge'
+
+
 def get_models_dir() -> Path:
     """Get the models directory"""
     if os.environ.get('MEDIAFORGE_PORTABLE'):
-        # Portable mode: use app directory
-        models_dir = get_app_dir() / 'models'
+        models_dir = get_data_dir() / 'models'
     else:
-        # Standard mode: use U2NET_HOME or app directory
         u2net_home = os.environ.get('U2NET_HOME')
         if u2net_home:
             models_dir = Path(u2net_home)
         else:
-            models_dir = get_app_dir() / 'models'
+            models_dir = get_data_dir() / 'models'
     
     models_dir.mkdir(parents=True, exist_ok=True)
     return models_dir
@@ -40,18 +74,14 @@ def get_models_dir() -> Path:
 
 def get_config_dir() -> Path:
     """Get the configuration directory"""
-    if os.environ.get('MEDIAFORGE_PORTABLE'):
-        config_dir = get_app_dir() / 'config'
-    else:
-        config_dir = get_app_dir() / 'config'
-    
+    config_dir = get_data_dir() / 'config'
     config_dir.mkdir(parents=True, exist_ok=True)
     return config_dir
 
 
 def get_logs_dir() -> Path:
     """Get the logs directory"""
-    logs_dir = get_app_dir() / 'logs'
+    logs_dir = get_data_dir() / 'logs'
     logs_dir.mkdir(parents=True, exist_ok=True)
     return logs_dir
 

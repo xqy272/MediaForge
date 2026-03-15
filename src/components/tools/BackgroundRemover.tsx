@@ -22,7 +22,6 @@ import {
     removeBackground,
     chromaKeyRemove,
     checkModel,
-    getModelsDir,
     onProgress,
     type ProgressEvent,
 } from '../../lib/python-rpc';
@@ -89,10 +88,8 @@ export const BackgroundRemover: React.FC = () => {
     // Open models directory
     const handleOpenModelsDir = useCallback(async () => {
         try {
-            const dir = await getModelsDir();
-            // Use shell to open directory
-            const opener = await import('@tauri-apps/plugin-opener');
-            await (opener as any).open(dir);
+            const { invoke } = await import('@tauri-apps/api/core');
+            await invoke('open_models_dir');
         } catch (e) {
             console.error('Failed to open models dir:', e);
         }

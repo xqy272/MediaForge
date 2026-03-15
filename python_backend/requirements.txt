@@ -6,8 +6,8 @@ rembg>=2.0.50
 # Image Processing
 Pillow>=10.0.0
 
-# Video Processing
-opencv-python>=4.8.0
+# Video Processing (headless: no Qt GUI dependency, avoids DLL issues in bundled env)
+opencv-python-headless>=4.8.0
 
 # GPU Acceleration (choose one based on hardware)
 # For NVIDIA GPU:

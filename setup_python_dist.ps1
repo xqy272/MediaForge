@@ -48,6 +48,8 @@ Write-Host "Installing pip..."
 
 # 5. Install Requirements
 Write-Host "Installing dependencies..."
+# Remove opencv-python (non-headless) if present, to avoid conflict with headless version
+& "$pythonDir/python.exe" -m pip uninstall opencv-python -y 2>$null
 & "$pythonDir/python.exe" -m pip install -r "$backendSource/requirements.txt" --no-warn-script-location
 
 # 6. Copy Backend Code
