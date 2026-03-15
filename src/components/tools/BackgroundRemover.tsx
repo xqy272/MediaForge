@@ -30,7 +30,7 @@ type Mode = 'ai' | 'chromakey';
 
 interface ProcessResult {
     success: boolean;
-    outputPath?: string;
+    output_path?: string;
     error?: string;
 }
 
@@ -334,7 +334,7 @@ export const BackgroundRemover: React.FC = () => {
                                     <Check className="w-5 h-5 text-green-500 shrink-0" />
                                     <div>
                                         <p className="font-medium text-green-600">{t('common.success')}</p>
-                                        <p className="text-sm text-muted-foreground mt-1 break-all">{result.outputPath}</p>
+                                        <p className="text-sm text-muted-foreground mt-1 break-all">{result.output_path}</p>
                                     </div>
                                 </>
                             ) : (

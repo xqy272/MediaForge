@@ -100,7 +100,7 @@ def rpc_remove_background(
                 log_callback=log_callback
             )
         
-        result_path = remover.remove_background_from_file(
+        success, result_path = remover.remove_background_from_file(
             input_path=input_path,
             output_path=output_path,
             alpha_matting=alpha_matting,
@@ -108,6 +108,12 @@ def rpc_remove_background(
             alpha_matting_background_threshold=alpha_matting_background_threshold,
             alpha_matting_erode_size=alpha_matting_erode_size
         )
+        
+        if not success:
+            return {
+                "success": False,
+                "error": result_path
+            }
         
         return {
             "success": True,
