@@ -114,8 +114,12 @@ fn open_models_dir(app: tauri::AppHandle) -> Result<(), String> {
     Ok(())
 }
 
-fn resolve_models_dir(_app: &tauri::AppHandle) -> std::path::PathBuf {
+/// Resolve the writable data directory for models, config, and logs.
+/// In portable mode (exe dir is writable), use exe dir.
+/// In installed mode (e.g. Program Files), use LOCALAPPDATA/MediaForge.
+pub(crate) fn resolve_data_dir() -> std::path::PathBuf {
     if cfg!(debug_assertions) {
+        // Debug: project root (3 levels up from exe at src-tauri/target/debug/)
         let exe_dir = std::env::current_exe()
             .ok()
             .and_then(|p| p.parent().map(|p| p.to_path_buf()))
@@ -124,28 +128,39 @@ fn resolve_models_dir(_app: &tauri::AppHandle) -> std::path::PathBuf {
             .parent()
             .and_then(|p| p.parent())
             .and_then(|p| p.parent())
-            .map(|p| p.join("models"))
-            .unwrap_or_else(|| std::path::PathBuf::from("models"))
+            .map(|p| p.to_path_buf())
+            .unwrap_or_else(|| std::path::PathBuf::from("."))
     } else {
-        // Release: try exe dir first, fall back to LOCALAPPDATA
         let exe_dir = std::env::current_exe()
             .ok()
             .and_then(|p| p.parent().map(|p| p.to_path_buf()))
             .unwrap_or_default();
-        let candidate = exe_dir.join("models");
 
-        // Check if exe dir is writable (e.g. not in Program Files)
-        if std::fs::create_dir_all(&candidate).is_ok() {
-            candidate
+        // Check if exe dir is truly writable by creating and removing a test file.
+        // Unlike create_dir_all (which succeeds on existing dirs even without write
+        // permission), this detects the case where an admin previously created
+        // directories that a normal user cannot write to.
+        let test_file = exe_dir.join(".mediaforge_write_test");
+        let writable = match std::fs::write(&test_file, "test") {
+            Ok(_) => {
+                let _ = std::fs::remove_file(&test_file);
+                true
+            }
+            Err(_) => false,
+        };
+
+        if writable {
+            exe_dir
         } else {
-            // Use LOCALAPPDATA/MediaForge/models
-            let local_app_data = std::env::var("LOCALAPPDATA")
-                .unwrap_or_else(|_| String::from("."));
-            std::path::PathBuf::from(local_app_data)
-                .join("MediaForge")
-                .join("models")
+            let local_app_data =
+                std::env::var("LOCALAPPDATA").unwrap_or_else(|_| String::from("."));
+            std::path::PathBuf::from(local_app_data).join("MediaForge")
         }
     }
+}
+
+fn resolve_models_dir(_app: &tauri::AppHandle) -> std::path::PathBuf {
+    resolve_data_dir().join("models")
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]

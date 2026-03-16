@@ -238,9 +238,17 @@ impl PythonManager {
             cmd.env("PATH", new_path);
         }
 
+        // Resolve the data directory using the same logic as the Rust side,
+        // then pass it to Python so both sides use the exact same paths.
+        let data_dir = crate::resolve_data_dir();
+
         cmd.arg(&backend_path)
             .env("MEDIAFORGE_PARENT_PID", std::process::id().to_string())
             .env("MEDIAFORGE_PORTABLE", "1")
+            .env(
+                "MEDIAFORGE_DATA_DIR",
+                data_dir.to_string_lossy().to_string(),
+            )
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
