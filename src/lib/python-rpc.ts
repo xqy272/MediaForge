@@ -55,10 +55,14 @@ export async function stopPython(): Promise<void> {
 }
 
 /**
- * Subscribe to progress events
+ * Subscribe to progress events, optionally filtered by task_id
  */
-export function onProgress(callback: (event: ProgressEvent) => void): Promise<UnlistenFn> {
+export function onProgress(
+    callback: (event: ProgressEvent) => void,
+    taskId?: string
+): Promise<UnlistenFn> {
     return listen<ProgressEvent>('python-progress', (event) => {
+        if (taskId && event.payload.task_id !== taskId) return;
         callback(event.payload);
     });
 }

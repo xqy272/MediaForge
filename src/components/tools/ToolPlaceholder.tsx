@@ -1,7 +1,7 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { motion } from 'framer-motion';
-import type { ToolKey } from '../layout';
+import { type ToolKey, toolNameKeys } from '../layout';
 
 interface ToolPlaceholderProps {
     toolKey: ToolKey;
@@ -9,15 +9,6 @@ interface ToolPlaceholderProps {
 
 export const ToolPlaceholder: React.FC<ToolPlaceholderProps> = ({ toolKey }) => {
     const { t } = useTranslation();
-
-    const toolNameKeys: Record<ToolKey, string> = {
-        'background-remover': 'tools.background_remover',
-        'image-resizer': 'tools.image_resizer',
-        'image-stitcher': 'tools.image_stitcher',
-        'format-converter': 'tools.format_converter',
-        'video-to-frames': 'tools.video_to_frames',
-        'video-to-gif': 'tools.video_to_gif',
-    };
 
     return (
         <motion.div

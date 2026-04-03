@@ -14,7 +14,7 @@ import {
     AlertCircle,
     Video,
 } from 'lucide-react';
-import { cn } from '../../lib/utils';
+import { cn, getFileName } from '../../lib/utils';
 import { videoToGif, getVideoInfo, onProgress, type ProgressEvent } from '../../lib/python-rpc';
 
 interface VideoInfo {
@@ -127,7 +127,7 @@ export const VideoToGif: React.FC = () => {
                         {inputPath ? (
                             <div className="space-y-2">
                                 <Video className="w-12 h-12 mx-auto text-primary" />
-                                <p className="text-sm font-medium truncate">{inputPath.split('\\').pop()}</p>
+                                <p className="text-sm font-medium truncate">{getFileName(inputPath)}</p>
                                 {videoInfo && (
                                     <p className="text-xs text-muted-foreground">
                                         {videoInfo.width}×{videoInfo.height} • {videoInfo.fps.toFixed(1)} fps

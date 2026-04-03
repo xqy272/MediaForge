@@ -15,7 +15,7 @@ import {
     Video,
     FolderOpen,
 } from 'lucide-react';
-import { cn } from '../../lib/utils';
+import { cn, getFileName } from '../../lib/utils';
 import { extractFrames, getVideoInfo, onProgress, type ProgressEvent } from '../../lib/python-rpc';
 
 type ExtractMode = 'all' | 'interval';
@@ -155,7 +155,7 @@ export const VideoToFrames: React.FC = () => {
                         {inputPath ? (
                             <div className="space-y-2">
                                 <Video className="w-12 h-12 mx-auto text-primary" />
-                                <p className="text-sm font-medium truncate">{inputPath.split('\\').pop()}</p>
+                                <p className="text-sm font-medium truncate">{getFileName(inputPath)}</p>
                                 {videoInfo && (
                                     <p className="text-xs text-muted-foreground">
                                         {videoInfo.width}×{videoInfo.height} • {videoInfo.fps.toFixed(1)} fps

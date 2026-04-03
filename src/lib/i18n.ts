@@ -11,11 +11,16 @@ const resources = {
     ja: { translation: ja },
 };
 
+// Read saved language from localStorage, default to zh-CN
+const savedLanguage = typeof window !== 'undefined'
+    ? localStorage.getItem('language') || 'zh-CN'
+    : 'zh-CN';
+
 i18n
     .use(initReactI18next)
     .init({
         resources,
-        lng: 'zh-CN', // Default language
+        lng: savedLanguage,
         fallbackLng: 'en',
         interpolation: {
             escapeValue: false,

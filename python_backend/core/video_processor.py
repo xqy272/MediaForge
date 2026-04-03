@@ -246,6 +246,7 @@ class VideoProcessor:
                output_path: str,
                fps: int = 10,
                scale: float = 1.0,
+               max_frames: int = 2000,
                progress_callback: Optional[Callable] = None,
                log_callback: Optional[Callable] = None) -> bool:
         """
@@ -255,6 +256,7 @@ class VideoProcessor:
             output_path: 输出GIF文件路径
             fps: 目标帧率
             scale: 缩放比例
+            max_frames: 最大帧数限制，防止内存溢出
             progress_callback: 进度回调函数
             log_callback: 日志回调函数
             
@@ -295,6 +297,12 @@ class VideoProcessor:
                 
                 pil_image = Image.fromarray(frame_rgb)
                 frames.append(pil_image)
+                
+                # Limit total frames to prevent OOM
+                if len(frames) >= max_frames:
+                    if log_callback:
+                        log_callback(f"Reached max frame limit ({max_frames}), stopping capture")
+                    break
             
             frame_count += 1
             
@@ -322,6 +330,9 @@ class VideoProcessor:
             loop=0,
             optimize=True
         )
+        
+        # Release frame memory
+        frames.clear()
         
         if progress_callback:
             progress_callback(1.0)

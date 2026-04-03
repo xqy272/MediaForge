@@ -2,7 +2,7 @@ import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { ThemeToggle } from './ThemeToggle';
 import { LanguageSelector } from './LanguageSelector';
-import type { ToolKey } from './Sidebar';
+import { type ToolKey, toolNameKeys } from './Sidebar';
 
 interface HeaderProps {
     currentTool: ToolKey;
@@ -15,15 +15,6 @@ const toolDescKeys: Record<ToolKey, string> = {
     'format-converter': 'tools.format_converter_desc',
     'video-to-frames': 'tools.video_to_frames_desc',
     'video-to-gif': 'tools.video_to_gif_desc',
-};
-
-const toolNameKeys: Record<ToolKey, string> = {
-    'background-remover': 'tools.background_remover',
-    'image-resizer': 'tools.image_resizer',
-    'image-stitcher': 'tools.image_stitcher',
-    'format-converter': 'tools.format_converter',
-    'video-to-frames': 'tools.video_to_frames',
-    'video-to-gif': 'tools.video_to_gif',
 };
 
 export const Header: React.FC<HeaderProps> = ({ currentTool }) => {

@@ -96,6 +96,8 @@
         "stitch_images": "画像を結合"
     },
     "image_resizer": {
+        "input_image": "入力画像",
+        "drag_drop_hint": "ここに画像をドラッグ＆ドロップまたはクリックして選択",
         "scale_percent": "パーセント",
         "fixed_size": "固定サイズ",
         "fixed_width": "固定幅",

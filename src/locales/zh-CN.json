@@ -96,6 +96,8 @@
         "stitch_images": "拼接图像"
     },
     "image_resizer": {
+        "input_image": "输入图像",
+        "drag_drop_hint": "拖拽图像到此处或点击选择",
         "scale_percent": "百分比缩放",
         "fixed_size": "固定尺寸",
         "fixed_width": "固定宽度",

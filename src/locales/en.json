@@ -96,6 +96,8 @@
         "stitch_images": "Stitch Images"
     },
     "image_resizer": {
+        "input_image": "Input Image",
+        "drag_drop_hint": "Drag & drop images here or click to select",
         "scale_percent": "Scale %",
         "fixed_size": "Fixed Size",
         "fixed_width": "Fixed Width",

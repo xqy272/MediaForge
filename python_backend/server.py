@@ -7,6 +7,7 @@ import json
 import logging
 import threading
 import traceback
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Callable, Dict, Optional
 from dataclasses import dataclass, field
 
@@ -52,6 +53,10 @@ class RpcServer:
         self.methods: Dict[str, Callable] = {}
         self.running = True
         self._lock = threading.Lock()
+        self._executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="rpc-worker")
+        
+        # Methods that should run synchronously on the main thread
+        self._sync_methods = {"ping", "shutdown", "get_version"}
         
         # Register built-in methods
         self.register_method("ping", self._ping)
@@ -156,6 +161,21 @@ class RpcServer:
                 error={"code": -32000, "message": str(e)}
             )
     
+    def _handle_and_respond(self, request_data: Dict[str, Any]):
+        """Handle a request and send response (used for threaded execution)"""
+        try:
+            response = self.handle_request(request_data)
+            if response is not None:
+                self._write_message(response.to_dict())
+        except Exception as e:
+            logger.error(f"Error in threaded handler: {e}")
+            logger.error(traceback.format_exc())
+            error_response = RpcResponse(
+                id=request_data.get("id"),
+                error={"code": -32000, "message": str(e)}
+            )
+            self._write_message(error_response.to_dict())
+    
     def run(self):
         """Main server loop - read from stdin, write to stdout"""
         logger.info("MediaForge Python backend started")
@@ -179,10 +199,15 @@ class RpcServer:
                 
                 try:
                     request_data = json.loads(line)
-                    response = self.handle_request(request_data)
+                    method = request_data.get("method", "")
                     
-                    if response is not None:
-                        self._write_message(response.to_dict())
+                    # Run sync methods on main thread, others in thread pool
+                    if method in self._sync_methods or request_data.get("id") is None:
+                        response = self.handle_request(request_data)
+                        if response is not None:
+                            self._write_message(response.to_dict())
+                    else:
+                        self._executor.submit(self._handle_and_respond, request_data)
                         
                 except json.JSONDecodeError as e:
                     logger.error(f"Invalid JSON: {e}")
@@ -197,6 +222,7 @@ class RpcServer:
             logger.error(f"Server error: {e}")
             logger.error(traceback.format_exc())
         finally:
+            self._executor.shutdown(wait=False)
             logger.info("MediaForge Python backend stopped")
 
 

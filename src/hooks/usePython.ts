@@ -18,6 +18,7 @@ export interface UsePythonResult {
     progress: ProgressEvent | null;
     logs: LogEvent[];
     clearLogs: () => void;
+    retry: () => void;
 }
 
 export function usePython(): UsePythonResult {
@@ -27,6 +28,7 @@ export function usePython(): UsePythonResult {
     const [progress, setProgress] = useState<ProgressEvent | null>(null);
     const [logs, setLogs] = useState<LogEvent[]>([]);
     const unlistenRefs = useRef<Array<() => void>>([]);
+    const [retryCount, setRetryCount] = useState(0);
 
     useEffect(() => {
         let mounted = true;
@@ -34,14 +36,14 @@ export function usePython(): UsePythonResult {
         const init = async () => {
             try {
                 setIsLoading(true);
+                setError(null);
                 await initPython();
 
-                // Check if Python is running
                 // Check if Python is running (with polling for race conditions)
                 let isRunning = false;
                 let attempts = 0;
 
-                while (attempts < 20 && mounted) {
+                while (attempts < 30 && mounted) {
                     const status = await getPythonStatus();
                     if (status.running) {
                         isRunning = true;
@@ -54,7 +56,9 @@ export function usePython(): UsePythonResult {
 
                 if (mounted) {
                     setIsReady(isRunning);
-                    setError(null);
+                    if (!isRunning) {
+                        setError('Python backend failed to start within timeout');
+                    }
                 }
 
                 // Subscribe to events
@@ -89,10 +93,14 @@ export function usePython(): UsePythonResult {
             mounted = false;
             unlistenRefs.current.forEach((unlisten) => unlisten());
         };
-    }, []);
+    }, [retryCount]);
 
     const clearLogs = useCallback(() => {
         setLogs([]);
+    }, []);
+
+    const retry = useCallback(() => {
+        setRetryCount((c) => c + 1);
     }, []);
 
     return {
@@ -102,5 +110,6 @@ export function usePython(): UsePythonResult {
         progress,
         logs,
         clearLogs,
+        retry,
     };
 }

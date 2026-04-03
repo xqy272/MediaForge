@@ -19,6 +19,65 @@ _background_remover = None
 _chroma_key_remover = None
 
 
+def _validate_path(file_path: str, must_exist: bool = True) -> str:
+    """
+    Validate and normalize a file path.
+    Prevents path traversal attacks by resolving the path and checking
+    it doesn't contain suspicious patterns.
+    
+    Args:
+        file_path: The path to validate
+        must_exist: Whether the file must already exist
+        
+    Returns:
+        The resolved absolute path string
+        
+    Raises:
+        ValueError: If the path is invalid or suspicious
+    """
+    if not file_path or not file_path.strip():
+        raise ValueError("Empty file path")
+    
+    resolved = Path(file_path).resolve()
+    
+    # Block null bytes (path injection)
+    if '\x00' in file_path:
+        raise ValueError("Invalid characters in path")
+    
+    if must_exist and not resolved.exists():
+        raise ValueError(f"File not found: {resolved}")
+    
+    return str(resolved)
+
+
+def _validate_dir(dir_path: str, create: bool = True) -> str:
+    """
+    Validate and normalize a directory path.
+    
+    Args:
+        dir_path: The directory path to validate
+        create: Whether to create the directory if it doesn't exist
+        
+    Returns:
+        The resolved absolute path string
+        
+    Raises:
+        ValueError: If the path is invalid
+    """
+    if not dir_path or not dir_path.strip():
+        raise ValueError("Empty directory path")
+    
+    if '\x00' in dir_path:
+        raise ValueError("Invalid characters in path")
+    
+    resolved = Path(dir_path).resolve()
+    
+    if create:
+        resolved.mkdir(parents=True, exist_ok=True)
+    
+    return str(resolved)
+
+
 def get_background_remover(model_name: str = 'u2net'):
     """Get or create BackgroundRemover instance"""
     global _background_remover
@@ -74,6 +133,10 @@ def rpc_remove_background(
 ):
     """Remove background from a single image"""
     task_id = str(uuid.uuid4())
+    
+    input_path = _validate_path(input_path)
+    if output_path:
+        output_path = _validate_path(output_path, must_exist=False)
     
     # Check model availability
     model_status = check_model(model_name)
@@ -139,6 +202,9 @@ def rpc_remove_background_batch(
     """Remove background from multiple images"""
     task_id = str(uuid.uuid4())
     
+    input_paths = [_validate_path(p) for p in input_paths]
+    output_dir = _validate_dir(output_dir)
+    
     # Check model availability
     model_status = check_model(model_name)
     if not model_status['available']:
@@ -164,7 +230,7 @@ def rpc_remove_background_batch(
                 log_callback=log_callback
             )
         
-        results = remover.process_batch(
+        success_count, fail_count = remover.process_batch(
             input_paths=input_paths,
             output_dir=output_dir,
             progress_callback=progress_callback,
@@ -175,8 +241,8 @@ def rpc_remove_background_batch(
         return {
             "success": True,
             "task_id": task_id,
-            "processed_count": len(results),
-            "results": results
+            "processed_count": success_count,
+            "failed_count": fail_count
         }
         
     except Exception as e:
@@ -201,30 +267,35 @@ def rpc_chroma_key(
     """Remove background using chroma key"""
     task_id = str(uuid.uuid4())
     
+    input_path = _validate_path(input_path)
+    if output_path:
+        output_path = _validate_path(output_path, must_exist=False)
+    
     try:
         from PIL import Image
         
         remover = get_chroma_key_remover()
-        image = Image.open(input_path)
         
-        target = tuple(target_color) if target_color else None
-        
-        result = remover.remove_background_chroma_key(
-            image=image,
-            target_color=target,
-            auto_detect=auto_detect,
-            hue_tolerance=hue_tolerance,
-            sat_threshold=saturation_tolerance,
-            val_threshold=value_tolerance,
-            **kwargs
-        )
-        
-        # Determine output path
-        if output_path is None:
-            name, ext = os.path.splitext(input_path)
-            output_path = f"{name}_chromakey.png"
-        
-        result.save(output_path, 'PNG')
+        with Image.open(input_path) as image:
+            target = tuple(target_color) if target_color else None
+            
+            result = remover.remove_background_chroma_key(
+                image=image,
+                target_color=target,
+                auto_detect=auto_detect,
+                hue_tolerance=hue_tolerance,
+                sat_threshold=saturation_tolerance,
+                val_threshold=value_tolerance,
+                **kwargs
+            )
+            
+            # Determine output path
+            if output_path is None:
+                name, ext = os.path.splitext(input_path)
+                output_path = f"{name}_chromakey.png"
+            
+            result.save(output_path, 'PNG')
+            result.close()
         
         return {
             "success": True,
@@ -254,7 +325,16 @@ def rpc_resize_image(
 ):
     """Resize an image"""
     try:
+        input_path = _validate_path(input_path)
+        if output_path:
+            output_path = _validate_path(output_path, must_exist=False)
+        
         from core.image_resizer import process_image
+        
+        # Generate output path if not provided (avoid overwriting original)
+        if not output_path:
+            name, ext = os.path.splitext(input_path)
+            output_path = f"{name}_resized{ext}"
         
         success = process_image(
             image_path=input_path,
@@ -262,12 +342,12 @@ def rpc_resize_image(
             scale=scale,
             width=width,
             height=height,
-            output_path=output_path or input_path
+            output_path=output_path
         )
         
         return {
             "success": success,
-            "output_path": output_path or input_path
+            "output_path": output_path
         }
         
     except Exception as e:
@@ -282,6 +362,7 @@ def rpc_resize_image(
 def rpc_image_info(input_path: str, **kwargs):
     """Get image information"""
     try:
+        input_path = _validate_path(input_path)
         from core.image_resizer import get_image_info
         return get_image_info(input_path)
     except Exception as e:
@@ -294,6 +375,7 @@ def rpc_image_info(input_path: str, **kwargs):
 def rpc_video_info(input_path: str, **kwargs):
     """Get video information"""
     try:
+        input_path = _validate_path(input_path)
         from core.video_processor import VideoProcessor
         processor = VideoProcessor(input_path)
         return processor.get_info()
@@ -312,6 +394,9 @@ def rpc_extract_frames(
 ):
     """Extract frames from video"""
     task_id = str(uuid.uuid4())
+    
+    input_path = _validate_path(input_path)
+    output_dir = _validate_dir(output_dir)
     
     try:
         from core.video_processor import VideoProcessor
@@ -360,6 +445,9 @@ def rpc_video_to_gif(
 ):
     """Convert video to GIF"""
     task_id = str(uuid.uuid4())
+    
+    input_path = _validate_path(input_path)
+    output_path = _validate_path(output_path, must_exist=False)
     
     try:
         from core.video_processor import VideoProcessor
@@ -444,57 +532,65 @@ def rpc_stitch_images(
     """Stitch multiple images into a grid"""
     task_id = str(uuid.uuid4())
     
+    input_paths = [_validate_path(p) for p in input_paths]
+    output_path = _validate_path(output_path, must_exist=False)
+    
     try:
         from PIL import Image
         
         images = []
-        for i, path in enumerate(input_paths):
-            img = Image.open(path)
-            images.append(img)
-            server.send_progress(task_id, (i + 1) / (len(input_paths) + 1))
-        
-        if not images:
-            return {"success": False, "error": "No images loaded"}
-        
-        # Calculate grid dimensions
-        rows = (len(images) + columns - 1) // columns
-        
-        # Get max dimensions
-        max_w = max(img.width for img in images)
-        max_h = max(img.height for img in images)
-        
-        # Create canvas
-        canvas_w = columns * max_w + (columns - 1) * spacing
-        canvas_h = rows * max_h + (rows - 1) * spacing
-        
-        canvas = Image.new('RGBA', (canvas_w, canvas_h), (255, 255, 255, 0))
-        
-        # Paste images
-        for idx, img in enumerate(images):
-            row = idx // columns
-            col = idx % columns
+        try:
+            for i, path in enumerate(input_paths):
+                img = Image.open(path)
+                images.append(img)
+                server.send_progress(task_id, (i + 1) / (len(input_paths) + 1))
             
-            x = col * (max_w + spacing) + (max_w - img.width) // 2
-            y = row * (max_h + spacing) + (max_h - img.height) // 2
+            if not images:
+                return {"success": False, "error": "No images loaded"}
             
-            if img.mode != 'RGBA':
-                img = img.convert('RGBA')
-            canvas.paste(img, (x, y))
-        
-        # Save
-        if output_path.lower().endswith(('.jpg', '.jpeg')):
-            canvas = canvas.convert('RGB')
-        canvas.save(output_path)
-        
-        server.send_progress(task_id, 1.0)
-        
-        return {
-            "success": True,
-            "task_id": task_id,
-            "output_path": output_path,
-            "grid_size": f"{columns}x{rows}",
-            "canvas_size": f"{canvas_w}x{canvas_h}"
-        }
+            # Calculate grid dimensions
+            rows = (len(images) + columns - 1) // columns
+            
+            # Get max dimensions
+            max_w = max(img.width for img in images)
+            max_h = max(img.height for img in images)
+            
+            # Create canvas
+            canvas_w = columns * max_w + (columns - 1) * spacing
+            canvas_h = rows * max_h + (rows - 1) * spacing
+            
+            canvas = Image.new('RGBA', (canvas_w, canvas_h), (255, 255, 255, 0))
+            
+            # Paste images
+            for idx, img in enumerate(images):
+                row = idx // columns
+                col = idx % columns
+                
+                x = col * (max_w + spacing) + (max_w - img.width) // 2
+                y = row * (max_h + spacing) + (max_h - img.height) // 2
+                
+                if img.mode != 'RGBA':
+                    img = img.convert('RGBA')
+                canvas.paste(img, (x, y))
+            
+            # Save
+            if output_path.lower().endswith(('.jpg', '.jpeg')):
+                canvas = canvas.convert('RGB')
+            canvas.save(output_path)
+            canvas.close()
+            
+            server.send_progress(task_id, 1.0)
+            
+            return {
+                "success": True,
+                "task_id": task_id,
+                "output_path": output_path,
+                "grid_size": f"{columns}x{rows}",
+                "canvas_size": f"{canvas_w}x{canvas_h}"
+            }
+        finally:
+            for img in images:
+                img.close()
         
     except Exception as e:
         logger.error(f"Image stitching failed: {e}")
@@ -512,30 +608,37 @@ def rpc_convert_image(
 ):
     """Convert image to another format"""
     try:
+        input_path = _validate_path(input_path)
+        output_path = _validate_path(output_path, must_exist=False)
+        
         from PIL import Image
         
-        img = Image.open(input_path)
-        
-        # Handle format specific conversions
-        output_lower = output_path.lower()
-        if output_lower.endswith(('.jpg', '.jpeg')):
-            if img.mode in ('RGBA', 'LA', 'P'):
-                background = Image.new('RGB', img.size, (255, 255, 255))
-                if img.mode == 'P':
-                    img = img.convert('RGBA')
-                background.paste(img, mask=img.split()[-1] if img.mode == 'RGBA' else None)
-                img = background
-            img.save(output_path, 'JPEG', quality=quality)
-        elif output_lower.endswith('.png'):
-            img.save(output_path, 'PNG')
-        elif output_lower.endswith('.webp'):
-            img.save(output_path, 'WEBP', quality=quality)
-        elif output_lower.endswith('.bmp'):
-            if img.mode == 'RGBA':
-                img = img.convert('RGB')
-            img.save(output_path, 'BMP')
-        else:
-            img.save(output_path)
+        with Image.open(input_path) as img:
+            # Handle format specific conversions
+            output_lower = output_path.lower()
+            if output_lower.endswith(('.jpg', '.jpeg')):
+                if img.mode in ('RGBA', 'LA', 'P'):
+                    background = Image.new('RGB', img.size, (255, 255, 255))
+                    if img.mode == 'P':
+                        img = img.convert('RGBA')
+                    background.paste(img, mask=img.split()[-1] if img.mode == 'RGBA' else None)
+                    background.save(output_path, 'JPEG', quality=quality)
+                    background.close()
+                else:
+                    img.save(output_path, 'JPEG', quality=quality)
+            elif output_lower.endswith('.png'):
+                img.save(output_path, 'PNG')
+            elif output_lower.endswith('.webp'):
+                img.save(output_path, 'WEBP', quality=quality)
+            elif output_lower.endswith('.bmp'):
+                if img.mode == 'RGBA':
+                    converted = img.convert('RGB')
+                    converted.save(output_path, 'BMP')
+                    converted.close()
+                else:
+                    img.save(output_path, 'BMP')
+            else:
+                img.save(output_path)
         
         return {"success": True, "output_path": output_path}
         
@@ -555,6 +658,9 @@ def rpc_convert_batch(
     """Convert multiple images to another format"""
     task_id = str(uuid.uuid4())
     
+    input_paths = [_validate_path(p) for p in input_paths]
+    output_dir = _validate_dir(output_dir)
+    
     try:
         from PIL import Image
         import os
@@ -566,25 +672,26 @@ def rpc_convert_batch(
         
         for i, input_path in enumerate(input_paths):
             try:
-                img = Image.open(input_path)
-                
-                base_name = os.path.splitext(os.path.basename(input_path))[0]
-                output_path = os.path.join(output_dir, f"{base_name}.{target_format}")
-                
-                if target_format.lower() in ('jpg', 'jpeg'):
-                    if img.mode in ('RGBA', 'LA', 'P'):
-                        background = Image.new('RGB', img.size, (255, 255, 255))
-                        if img.mode == 'P':
-                            img = img.convert('RGBA')
-                        background.paste(img, mask=img.split()[-1] if img.mode == 'RGBA' else None)
-                        img = background
-                    img.save(output_path, 'JPEG', quality=quality)
-                elif target_format.lower() == 'png':
-                    img.save(output_path, 'PNG')
-                elif target_format.lower() == 'webp':
-                    img.save(output_path, 'WEBP', quality=quality)
-                else:
-                    img.save(output_path)
+                with Image.open(input_path) as img:
+                    base_name = os.path.splitext(os.path.basename(input_path))[0]
+                    output_path = os.path.join(output_dir, f"{base_name}.{target_format}")
+                    
+                    if target_format.lower() in ('jpg', 'jpeg'):
+                        if img.mode in ('RGBA', 'LA', 'P'):
+                            background = Image.new('RGB', img.size, (255, 255, 255))
+                            if img.mode == 'P':
+                                img = img.convert('RGBA')
+                            background.paste(img, mask=img.split()[-1] if img.mode == 'RGBA' else None)
+                            background.save(output_path, 'JPEG', quality=quality)
+                            background.close()
+                        else:
+                            img.save(output_path, 'JPEG', quality=quality)
+                    elif target_format.lower() == 'png':
+                        img.save(output_path, 'PNG')
+                    elif target_format.lower() == 'webp':
+                        img.save(output_path, 'WEBP', quality=quality)
+                    else:
+                        img.save(output_path)
                 
                 success_count += 1
             except Exception as e:
@@ -618,22 +725,27 @@ def rpc_rotate_image(
 ):
     """Rotate an image by the specified angle"""
     try:
+        input_path = _validate_path(input_path)
+        if output_path:
+            output_path = _validate_path(output_path, must_exist=False)
+        
         from PIL import Image
         
-        img = Image.open(input_path)
-        
-        rotated = img.rotate(-angle, expand=expand)  # Negative for clockwise
-        
-        if output_path is None:
-            name, ext = os.path.splitext(input_path)
-            output_path = f"{name}_rotated{ext}"
-        
-        rotated.save(output_path)
+        with Image.open(input_path) as img:
+            rotated = img.rotate(-angle, expand=expand)  # Negative for clockwise
+            
+            if output_path is None:
+                name, ext = os.path.splitext(input_path)
+                output_path = f"{name}_rotated{ext}"
+            
+            rotated.save(output_path)
+            new_size = f"{rotated.width}x{rotated.height}"
+            rotated.close()
         
         return {
             "success": True,
             "output_path": output_path,
-            "new_size": f"{rotated.width}x{rotated.height}"
+            "new_size": new_size
         }
         
     except Exception as e:
@@ -652,6 +764,8 @@ def rpc_rename_batch(
 ):
     """Rename multiple images with a pattern"""
     task_id = str(uuid.uuid4())
+    
+    input_paths = [_validate_path(p) for p in input_paths]
     
     try:
         import shutil

@@ -17,7 +17,7 @@ import {
     Trash2,
     X,
 } from 'lucide-react';
-import { cn } from '../../lib/utils';
+import { cn, getFileName } from '../../lib/utils';
 import { pythonCall, onProgress, type ProgressEvent } from '../../lib/python-rpc';
 
 export const ImageStitcher: React.FC = () => {
@@ -160,7 +160,7 @@ export const ImageStitcher: React.FC = () => {
                                 >
                                     <div className="flex items-center gap-2 min-w-0">
                                         <ImageIcon className="w-4 h-4 text-muted-foreground shrink-0" />
-                                        <span className="text-sm truncate">{path.split('\\').pop()}</span>
+                                        <span className="text-sm truncate">{getFileName(path)}</span>
                                     </div>
                                     <button
                                         onClick={() => handleRemoveImage(index)}

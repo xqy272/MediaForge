@@ -14,6 +14,15 @@ import { cn } from '../../lib/utils';
 
 export type ToolKey = 'background-remover' | 'image-resizer' | 'image-stitcher' | 'format-converter' | 'video-to-frames' | 'video-to-gif';
 
+export const toolNameKeys: Record<ToolKey, string> = {
+    'background-remover': 'tools.background_remover',
+    'image-resizer': 'tools.image_resizer',
+    'image-stitcher': 'tools.image_stitcher',
+    'format-converter': 'tools.format_converter',
+    'video-to-frames': 'tools.video_to_frames',
+    'video-to-gif': 'tools.video_to_gif',
+};
+
 interface SidebarProps {
     activeTool: ToolKey;
     onToolChange: (tool: ToolKey) => void;

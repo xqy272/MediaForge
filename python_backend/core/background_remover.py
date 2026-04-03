@@ -86,7 +86,7 @@ class BackgroundRemover:
     def _get_providers(self) -> List[str]:
         """获取执行提供者列表"""
         try:
-            from ..utils.gpu_manager import get_gpu_manager
+            from utils.gpu_manager import get_gpu_manager
             manager = get_gpu_manager()
             providers = manager.configure_onnxruntime_providers()
             self._provider_info = manager.get_provider_display_name()
@@ -121,7 +121,7 @@ class BackgroundRemover:
                 log_callback(f"Using: {self._provider_info}")
             
             if self.model_name == 'RMBG-2.0':
-                from ..utils.portable import get_models_dir
+                from utils.portable import get_models_dir
                 model_path = get_models_dir() / f"{self.model_name}.onnx"
                 if not model_path.exists():
                      raise FileNotFoundError(f"Model {self.model_name} not found locally")

@@ -16,7 +16,7 @@ import {
     ArrowRightLeft,
     ArrowUpDown,
 } from 'lucide-react';
-import { cn } from '../../lib/utils';
+import { cn, getFileName } from '../../lib/utils';
 import { resizeImage, getImageInfo } from '../../lib/python-rpc';
 
 type ResizeMode = 'scale' | 'fixed' | 'fixed_width' | 'fixed_height';
@@ -143,7 +143,7 @@ export const ImageResizer: React.FC = () => {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {/* Input Section */}
                 <div className="bg-card border border-border rounded-xl p-5 space-y-4">
-                    <h3 className="font-semibold text-lg">{t('background_remover.input_image')}</h3>
+                    <h3 className="font-semibold text-lg">{t('image_resizer.input_image')}</h3>
 
                     {/* Drop Zone */}
                     <div
@@ -157,7 +157,7 @@ export const ImageResizer: React.FC = () => {
                         {inputPath ? (
                             <div className="space-y-2">
                                 <ImageIcon className="w-12 h-12 mx-auto text-primary" />
-                                <p className="text-sm font-medium truncate">{inputPath.split('\\').pop()}</p>
+                                <p className="text-sm font-medium truncate">{getFileName(inputPath)}</p>
                                 {imageInfo && (
                                     <p className="text-xs text-muted-foreground">
                                         {imageInfo.width} × {imageInfo.height} • {imageInfo.format}
@@ -167,7 +167,7 @@ export const ImageResizer: React.FC = () => {
                         ) : (
                             <div className="space-y-2">
                                 <Upload className="w-12 h-12 mx-auto text-muted-foreground" />
-                                <p className="text-muted-foreground">{t('background_remover.drag_drop_hint')}</p>
+                                <p className="text-muted-foreground">{t('image_resizer.drag_drop_hint')}</p>
                             </div>
                         )}
                     </div>

@@ -17,7 +17,7 @@ import {
     Sparkles,
     Palette,
 } from 'lucide-react';
-import { cn } from '../../lib/utils';
+import { cn, getFileName } from '../../lib/utils';
 import {
     removeBackground,
     chromaKeyRemove,
@@ -190,7 +190,7 @@ export const BackgroundRemover: React.FC = () => {
                         {inputPath ? (
                             <div className="space-y-2">
                                 <ImageIcon className="w-12 h-12 mx-auto text-primary" />
-                                <p className="text-sm font-medium truncate">{inputPath.split('\\').pop()}</p>
+                                <p className="text-sm font-medium truncate">{getFileName(inputPath)}</p>
                                 <p className="text-xs text-muted-foreground">{t('common.select_file')} to change</p>
                             </div>
                         ) : (
