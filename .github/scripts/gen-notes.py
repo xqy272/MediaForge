@@ -75,7 +75,7 @@ Commits:
 
 payload = json.dumps({
     "model": MODEL,
-    "max_tokens": 1024,
+    "max_completion_tokens": 1024,
     "messages": [{"role": "user", "content": prompt}],
 }).encode("utf-8")
 
