@@ -181,10 +181,13 @@ npm run dev
 ## CI/CD
 
 GitHub Actions workflow at `.github/workflows/release.yml`:
-- Triggers on tag push (`v*`)
-- Builds Windows installer (NSIS) with auto-updater JSON
-- Creates draft GitHub release with artifacts
-- Requires `TAURI_SIGNING_PRIVATE_KEY` and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` secrets
+- Triggered via `workflow_dispatch` (enter version in GitHub UI — no manual tag push needed)
+- Bumps version in `package.json`, `tauri.conf.json`, `Cargo.toml` via `.github/scripts/bump-version.js`
+- Generates release notes from git commits via `.github/scripts/gen-notes.py` (OpenAI-compatible API)
+- Commits, tags, and pushes, then builds signed Windows installer + `latest.json`
+- Creates draft GitHub release with AI-generated notes
+- Required secrets: `TAURI_SIGNING_PRIVATE_KEY`, `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`, `AI_API_KEY`
+- Optional secrets: `AI_BASE_URL` (default: OpenAI), `AI_MODEL` (default: `gpt-4o-mini`)
 
 To generate a signing key pair:
 ```bash

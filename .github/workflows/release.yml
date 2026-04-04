@@ -1,54 +1,76 @@
-# MediaForge Release CI/CD
+# MediaForge Release Workflow
 #
-# Builds and publishes MediaForge when a version tag (v*) is pushed.
-#
-# SETUP REQUIRED (one-time):
-#   1. Generate a Tauri signing keypair:
+# SETUP (one-time):
+#   1. Generate Tauri signing keypair:
 #        npx tauri signer generate -w ~/.tauri/mediaforge.key
-#   2. Add the PRIVATE key as a GitHub secret: TAURI_SIGNING_PRIVATE_KEY
-#   3. Add the key password (if any) as:       TAURI_SIGNING_PRIVATE_KEY_PASSWORD
-#   4. Copy the PUBLIC key into src-tauri/tauri.conf.json → plugins.updater.pubkey
+#   2. Add GitHub Secrets:
+#        TAURI_SIGNING_PRIVATE_KEY       — private key content
+#        TAURI_SIGNING_PRIVATE_KEY_PASSWORD — key password (leave empty if none)
+#        AI_API_KEY                      — API key for release notes generation
+#        AI_BASE_URL                     — (optional) custom base URL, default: https://api.openai.com/v1
+#        AI_MODEL                        — (optional) model name, default: gpt-4o-mini
+#   3. Set public key in src-tauri/tauri.conf.json → plugins.updater.pubkey
 #
 # USAGE:
-#   git tag v0.2.0 && git push origin v0.2.0
+#   GitHub → Actions → Release → Run workflow → enter version (e.g. 0.3.0)
+#
+# The workflow will automatically:
+#   - Bump version in package.json / tauri.conf.json / Cargo.toml
+#   - Generate release notes via AI (OpenAI-compatible API) from commits since the last tag
+#   - Commit, tag, and push
+#   - Build signed installers + latest.json (for auto-update)
+#   - Publish a draft GitHub Release
 
 name: Release
 
 on:
-  push:
-    tags:
-      - 'v*'
   workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (e.g. 0.3.0)'
+        required: true
+        type: string
+      prerelease:
+        description: 'Mark as pre-release'
+        required: false
+        default: false
+        type: boolean
 
 concurrency:
-  group: release-${{ github.ref }}
+  group: release-${{ github.workflow }}
   cancel-in-progress: true
 
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+
 jobs:
-  build:
+  release:
     strategy:
       fail-fast: false
       matrix:
         include:
           - platform: windows-latest
             target: x86_64-pc-windows-msvc
-            arch: x64
-          # Uncomment to enable macOS / Linux builds:
+          # Uncomment to enable additional platforms:
           # - platform: macos-latest
           #   target: aarch64-apple-darwin
-          #   arch: aarch64
           # - platform: macos-latest
           #   target: x86_64-apple-darwin
-          #   arch: x64
           # - platform: ubuntu-22.04
           #   target: x86_64-unknown-linux-gnu
-          #   arch: x64
 
     runs-on: ${{ matrix.platform }}
 
     steps:
-      - name: Checkout
+      - name: Checkout (full history)
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          # Use a PAT if your main branch has push protection that blocks GITHUB_TOKEN
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -66,7 +88,32 @@ jobs:
         with:
           workspaces: src-tauri -> target
 
-      # Linux-only: install system dependencies
+      # ── Version bump ────────────────────────────────────────────────────────
+      - name: Bump version
+        run: node .github/scripts/bump-version.js ${{ inputs.version }}
+
+      # ── AI-generated release notes ──────────────────────────────────────────
+      - name: Generate release notes
+        id: notes
+        env:
+          AI_API_KEY: ${{ secrets.AI_API_KEY }}
+          AI_BASE_URL: ${{ secrets.AI_BASE_URL }}
+          AI_MODEL: ${{ secrets.AI_MODEL }}
+          VERSION: ${{ inputs.version }}
+        run: python3 .github/scripts/gen-notes.py
+
+      # ── Commit, tag, push ────────────────────────────────────────────────────
+      - name: Commit and tag
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add package.json src-tauri/tauri.conf.json src-tauri/Cargo.toml
+          git commit -m "chore: release v${{ inputs.version }}"
+          git tag "v${{ inputs.version }}"
+          git push origin HEAD:main
+          git push origin "v${{ inputs.version }}"
+
+      # ── Platform dependencies ────────────────────────────────────────────────
       - name: Install Linux dependencies
         if: runner.os == 'Linux'
         run: |
@@ -77,10 +124,7 @@ jobs:
             librsvg2-dev \
             patchelf
 
-      - name: Install frontend dependencies
-        run: npm ci
-
-      # Set up embedded Python distribution (Windows)
+      # ── Embed Python distribution (Windows) ─────────────────────────────────
       - name: Setup Python distribution
         if: runner.os == 'Windows'
         shell: pwsh
@@ -91,18 +135,22 @@ jobs:
             Write-Host "setup_python_dist.ps1 not found, skipping"
           }
 
-      - name: Build Tauri App
+      # ── Frontend ─────────────────────────────────────────────────────────────
+      - name: Install frontend dependencies
+        run: npm ci
+
+      # ── Build ────────────────────────────────────────────────────────────────
+      - name: Build Tauri app
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
-          tagName: ${{ github.ref_name }}
-          releaseName: 'MediaForge ${{ github.ref_name }}'
-          releaseBody: |
-            See the [CHANGELOG](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md) for details.
+          tagName: v${{ inputs.version }}
+          releaseName: MediaForge v${{ inputs.version }}
+          releaseBody: ${{ steps.notes.outputs.notes }}
           releaseDraft: true
-          prerelease: false
+          prerelease: ${{ inputs.prerelease }}
           args: --target ${{ matrix.target }}
           includeUpdaterJson: true
