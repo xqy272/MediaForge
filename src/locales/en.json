@@ -124,6 +124,7 @@
     },
     "python_status": {
         "initializing": "Python backend initializing...",
+        "extracting": "Setting up Python environment (first launch)...",
         "retry": "Retry"
     },
     "gpu": {
@@ -150,6 +151,7 @@
         "update_available": "Update available: v{{version}}",
         "install_update": "Install Update",
         "check_updates": "Check for Updates",
+        "update_check_failed": "Unable to check for updates. Please check your network or try again later.",
         "about": "About"
     }
 }

@@ -40,8 +40,7 @@
       "icons/icon.ico"
     ],
     "resources": [
-      "python_dist/python",
-      "python_dist/backend"
+      "python_dist.zip"
     ],
     "windows": {
       "certificateThumbprint": null,

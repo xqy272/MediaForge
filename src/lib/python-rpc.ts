@@ -54,6 +54,22 @@ export async function stopPython(): Promise<void> {
     await invoke('stop_python');
 }
 
+export interface InitProgressEvent {
+    progress: number;
+    message: string;
+}
+
+/**
+ * Subscribe to Python init progress events (zip extraction)
+ */
+export function onInitProgress(
+    callback: (event: InitProgressEvent) => void
+): Promise<UnlistenFn> {
+    return listen<InitProgressEvent>('python-init-progress', (event) => {
+        callback(event.payload);
+    });
+}
+
 /**
  * Subscribe to progress events, optionally filtered by task_id
  */

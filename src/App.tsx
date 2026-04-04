@@ -27,7 +27,7 @@ const VideoToGif = lazy(() =>
 
 function App() {
   const { t } = useTranslation();
-  const { isReady, isLoading, error, retry } = usePython();
+  const { isReady, isLoading, error, retry, initProgress } = usePython();
 
   const renderTool = (activeTool: ToolKey) => {
     const toolComponents: Record<ToolKey, React.ReactNode> = {
@@ -42,6 +42,23 @@ function App() {
     return (
       <AnimatePresence mode="wait">
         <div key={activeTool}>
+          {/* Python init progress (first-launch zip extraction) */}
+          {isLoading && initProgress && (
+            <div className="mb-4 p-4 bg-blue-500/10 border border-blue-500/30 rounded-lg">
+              <div className="flex items-center gap-3 mb-2">
+                <Loader2 className="w-5 h-5 animate-spin text-blue-500" />
+                <span className="text-sm text-blue-600 font-medium">
+                  {t('python_status.extracting')}
+                </span>
+              </div>
+              <div className="w-full bg-blue-500/20 rounded-full h-2">
+                <div
+                  className="bg-blue-500 h-2 rounded-full transition-all duration-300"
+                  style={{ width: `${Math.round(initProgress.progress * 100)}%` }}
+                />
+              </div>
+            </div>
+          )}
           {/* Python status indicator */}
           {!isReady && !isLoading && (
             <div className="mb-4 p-3 bg-yellow-500/10 border border-yellow-500/30 rounded-lg text-sm text-yellow-600 flex items-center justify-between">

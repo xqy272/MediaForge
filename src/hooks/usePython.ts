@@ -7,8 +7,10 @@ import {
     getPythonStatus,
     onProgress,
     onLog,
+    onInitProgress,
     type ProgressEvent,
     type LogEvent,
+    type InitProgressEvent,
 } from '../lib/python-rpc';
 
 export interface UsePythonResult {
@@ -16,6 +18,7 @@ export interface UsePythonResult {
     isLoading: boolean;
     error: string | null;
     progress: ProgressEvent | null;
+    initProgress: InitProgressEvent | null;
     logs: LogEvent[];
     clearLogs: () => void;
     retry: () => void;
@@ -26,6 +29,7 @@ export function usePython(): UsePythonResult {
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [progress, setProgress] = useState<ProgressEvent | null>(null);
+    const [initProgress, setInitProgress] = useState<InitProgressEvent | null>(null);
     const [logs, setLogs] = useState<LogEvent[]>([]);
     const unlistenRefs = useRef<Array<() => void>>([]);
     const [retryCount, setRetryCount] = useState(0);
@@ -37,7 +41,22 @@ export function usePython(): UsePythonResult {
             try {
                 setIsLoading(true);
                 setError(null);
+                setInitProgress(null);
+
+                // Subscribe to init progress BEFORE calling initPython
+                const unlistenInit = await onInitProgress((event) => {
+                    if (mounted) {
+                        setInitProgress(event);
+                    }
+                });
+                unlistenRefs.current.push(unlistenInit);
+
                 await initPython();
+
+                // Clear init progress after extraction completes
+                if (mounted) {
+                    setInitProgress(null);
+                }
 
                 // Check if Python is running (with polling for race conditions)
                 let isRunning = false;
@@ -74,7 +93,7 @@ export function usePython(): UsePythonResult {
                     }
                 });
 
-                unlistenRefs.current = [unlistenProgress, unlistenLog];
+                unlistenRefs.current.push(unlistenProgress, unlistenLog);
             } catch (e) {
                 if (mounted) {
                     setError(e instanceof Error ? e.message : String(e));
@@ -108,6 +127,7 @@ export function usePython(): UsePythonResult {
         isLoading,
         error,
         progress,
+        initProgress,
         logs,
         clearLogs,
         retry,

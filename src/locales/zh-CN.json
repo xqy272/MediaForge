@@ -124,6 +124,7 @@
     },
     "python_status": {
         "initializing": "Python 后端正在初始化...",
+        "extracting": "正在配置 Python 环境（首次启动）...",
         "retry": "重试"
     },
     "gpu": {
@@ -150,6 +151,7 @@
         "update_available": "可用更新: v{{version}}",
         "install_update": "安装更新",
         "check_updates": "检查更新",
+        "update_check_failed": "无法检查更新，请检查网络连接或稍后重试。",
         "about": "关于"
     }
 }

@@ -2,7 +2,7 @@
 
 mod python;
 
-use python::PythonManager;
+use python::{ensure_python_extracted, ProgressCallback, PythonManager};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tauri::{Emitter, Manager, State};
@@ -20,6 +20,20 @@ async fn init_python(
 ) -> Result<serde_json::Value, String> {
     if !state.python.is_running() {
         let resource_dir = app.path().resource_dir().ok();
+        let data_dir = resolve_data_dir();
+
+        // Ensure Python distribution is extracted from zip (no-op if already current)
+        let app_handle = app.clone();
+        let progress_cb: ProgressCallback = Arc::new(move |pct, msg| {
+            let _ = app_handle.emit(
+                "python-init-progress",
+                serde_json::json!({"progress": pct, "message": msg}),
+            );
+        });
+
+        ensure_python_extracted(resource_dir.as_ref(), &data_dir, Some(progress_cb))
+            .map_err(|e| e.to_string())?;
+
         state
             .python
             .start(resource_dir)
@@ -38,6 +52,12 @@ async fn python_call(
 ) -> Result<serde_json::Value, String> {
     if !state.python.is_running() {
         let resource_dir = app.path().resource_dir().ok();
+        let data_dir = resolve_data_dir();
+
+        // Ensure extraction before starting (no progress events for implicit start)
+        ensure_python_extracted(resource_dir.as_ref(), &data_dir, None)
+            .map_err(|e| e.to_string())?;
+
         state
             .python
             .start(resource_dir)

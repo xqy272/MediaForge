@@ -33,6 +33,9 @@ export const Settings: React.FC = () => {
     const { t, i18n } = useTranslation();
     const { theme, setTheme } = useTheme();
 
+    // App version
+    const [appVersion, setAppVersion] = useState('');
+
     // Models
     const [models, setModels] = useState<(ModelInfo & { downloading?: boolean; progress?: number })[]>([]);
     const [loadingModels, setLoadingModels] = useState(true);
@@ -53,6 +56,13 @@ export const Settings: React.FC = () => {
         { code: 'zh-CN', name: '简体中文' },
         { code: 'ja', name: '日本語' },
     ];
+
+    // Load app version
+    useEffect(() => {
+        import('@tauri-apps/api/app').then(({ getVersion }) =>
+            getVersion().then(setAppVersion)
+        ).catch(() => {});
+    }, []);
 
     // Load models list
     useEffect(() => {
@@ -137,10 +147,11 @@ export const Settings: React.FC = () => {
                 setUpdateStatus('up-to-date');
             }
         } catch (e) {
-            setUpdateError(String(e));
+            console.error('Update check failed:', e);
+            setUpdateError(t('settings.update_check_failed'));
             setUpdateStatus('error');
         }
-    }, []);
+    }, [t]);
 
     const handleInstallUpdate = useCallback(async () => {
         setUpdateStatus('downloading');
@@ -153,10 +164,11 @@ export const Settings: React.FC = () => {
                 await relaunch();
             }
         } catch (e) {
-            setUpdateError(String(e));
+            console.error('Update install failed:', e);
+            setUpdateError(t('settings.update_check_failed'));
             setUpdateStatus('error');
         }
-    }, []);
+    }, [t]);
 
     const handleLanguageChange = useCallback(
         (code: string) => {
@@ -309,7 +321,7 @@ export const Settings: React.FC = () => {
 
                 <div className="flex items-center justify-between">
                     <div>
-                        <p className="text-sm font-medium">{t('settings.current_version')}: 0.1.0</p>
+                        <p className="text-sm font-medium">{t('settings.current_version')}: {appVersion || '...'}</p>
                         {updateStatus === 'up-to-date' && (
                             <p className="text-xs text-green-600 mt-1">{t('settings.up_to_date')}</p>
                         )}

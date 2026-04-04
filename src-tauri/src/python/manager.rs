@@ -3,7 +3,7 @@
 
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Write};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
@@ -32,6 +32,179 @@ pub enum PythonError {
     RpcError(String),
     #[error("Timeout waiting for response")]
     Timeout,
+    #[error("Failed to extract Python distribution: {0}")]
+    ExtractFailed(String),
+}
+
+/// Progress callback for zip extraction
+pub type ProgressCallback = Arc<dyn Fn(f64, &str) + Send + Sync>;
+
+/// Ensure the Python distribution is extracted and up-to-date.
+///
+/// In release mode the installer ships a single `python_dist.zip`.
+/// This function extracts it to `<data_dir>/python_dist/` on first launch
+/// or when the embedded version marker changes (i.e. after an app update).
+pub fn ensure_python_extracted(
+    resource_dir: Option<&PathBuf>,
+    data_dir: &Path,
+    on_progress: Option<ProgressCallback>,
+) -> Result<(), PythonError> {
+    // Skip in development mode — we use the local venv directly
+    if cfg!(debug_assertions) {
+        return Ok(());
+    }
+
+    let zip_path = find_zip(resource_dir)?;
+    let dest = data_dir.join("python_dist");
+    let version_file = dest.join("VERSION");
+
+    // Read expected version from the zip
+    let expected_version = read_version_from_zip(&zip_path)?;
+
+    // Check if already extracted with the correct version
+    if version_file.exists() {
+        if let Ok(current) = std::fs::read_to_string(&version_file) {
+            if current.trim() == expected_version.trim() {
+                log::info!("Python dist already extracted (v{}), skipping", expected_version.trim());
+                return Ok(());
+            }
+            log::info!(
+                "Version mismatch: installed={} expected={}, re-extracting",
+                current.trim(),
+                expected_version.trim()
+            );
+        }
+    }
+
+    // Remove old extraction if present
+    if dest.exists() {
+        log::info!("Removing old python_dist at {:?}", dest);
+        if let Some(ref cb) = on_progress {
+            cb(0.0, "Cleaning up old Python environment...");
+        }
+        std::fs::remove_dir_all(&dest).map_err(|e| {
+            PythonError::ExtractFailed(format!("Failed to remove old python_dist: {}", e))
+        })?;
+    }
+
+    std::fs::create_dir_all(&dest).map_err(|e| {
+        PythonError::ExtractFailed(format!("Failed to create python_dist dir: {}", e))
+    })?;
+
+    // Extract
+    log::info!("Extracting {:?} → {:?}", zip_path, dest);
+    if let Some(ref cb) = on_progress {
+        cb(0.0, "Extracting Python environment...");
+    }
+
+    extract_zip(&zip_path, &dest, on_progress.as_ref())?;
+
+    log::info!("Python dist extracted successfully (v{})", expected_version.trim());
+    Ok(())
+}
+
+/// Locate the python_dist.zip in candidate directories
+fn find_zip(resource_dir: Option<&PathBuf>) -> Result<PathBuf, PythonError> {
+    let mut candidates = Vec::new();
+
+    // 1. Exe directory
+    if let Some(exe_dir) = std::env::current_exe()
+        .ok()
+        .and_then(|p| p.parent().map(|p| p.to_path_buf()))
+    {
+        candidates.push(exe_dir);
+    }
+
+    // 2. Resource directory
+    if let Some(rd) = resource_dir {
+        if !candidates.contains(rd) {
+            candidates.push(rd.clone());
+        }
+    }
+
+    for base in &candidates {
+        let zip = base.join("python_dist.zip");
+        if zip.exists() {
+            return Ok(zip);
+        }
+    }
+
+    Err(PythonError::ExtractFailed(format!(
+        "python_dist.zip not found in {:?}",
+        candidates
+    )))
+}
+
+/// Read the VERSION file from inside the zip without full extraction
+fn read_version_from_zip(zip_path: &Path) -> Result<String, PythonError> {
+    let file = std::fs::File::open(zip_path)
+        .map_err(|e| PythonError::ExtractFailed(format!("Cannot open zip: {}", e)))?;
+    let mut archive = zip::ZipArchive::new(file)
+        .map_err(|e| PythonError::ExtractFailed(format!("Invalid zip: {}", e)))?;
+
+    match archive.by_name("VERSION") {
+        Ok(mut entry) => {
+            let mut s = String::new();
+            std::io::Read::read_to_string(&mut entry, &mut s)
+                .map_err(|e| PythonError::ExtractFailed(format!("Cannot read VERSION: {}", e)))?;
+            Ok(s)
+        }
+        Err(_) => Ok("unknown".to_string()),
+    }
+}
+
+/// Extract zip contents to dest, reporting progress
+fn extract_zip(
+    zip_path: &Path,
+    dest: &Path,
+    on_progress: Option<&ProgressCallback>,
+) -> Result<(), PythonError> {
+    let file = std::fs::File::open(zip_path)
+        .map_err(|e| PythonError::ExtractFailed(format!("Cannot open zip: {}", e)))?;
+    let mut archive = zip::ZipArchive::new(file)
+        .map_err(|e| PythonError::ExtractFailed(format!("Invalid zip: {}", e)))?;
+
+    let total = archive.len();
+
+    for i in 0..total {
+        let mut entry = archive
+            .by_index(i)
+            .map_err(|e| PythonError::ExtractFailed(format!("Zip entry error: {}", e)))?;
+
+        let out_path = dest.join(
+            entry
+                .enclosed_name()
+                .ok_or_else(|| PythonError::ExtractFailed("Invalid zip entry name".into()))?,
+        );
+
+        if entry.is_dir() {
+            std::fs::create_dir_all(&out_path).map_err(|e| {
+                PythonError::ExtractFailed(format!("Cannot create dir {:?}: {}", out_path, e))
+            })?;
+        } else {
+            if let Some(parent) = out_path.parent() {
+                std::fs::create_dir_all(parent).map_err(|e| {
+                    PythonError::ExtractFailed(format!("Cannot create dir {:?}: {}", parent, e))
+                })?;
+            }
+            let mut outfile = std::fs::File::create(&out_path).map_err(|e| {
+                PythonError::ExtractFailed(format!("Cannot create file {:?}: {}", out_path, e))
+            })?;
+            std::io::copy(&mut entry, &mut outfile).map_err(|e| {
+                PythonError::ExtractFailed(format!("Cannot write {:?}: {}", out_path, e))
+            })?;
+        }
+
+        // Report progress every 200 files to avoid excessive callbacks
+        if let Some(cb) = on_progress {
+            if i % 200 == 0 || i == total - 1 {
+                let pct = (i + 1) as f64 / total as f64;
+                cb(pct, "Extracting Python environment...");
+            }
+        }
+    }
+
+    Ok(())
 }
 
 type NotificationCallback = Arc<dyn Fn(String, serde_json::Value) + Send + Sync>;
@@ -91,28 +264,32 @@ impl PythonManager {
             log::warn!("Virtual environment not found, using system Python");
             PathBuf::from("python")
         } else {
-            // Release: try exe directory first, then resource_dir
-            let candidates = Self::get_candidate_dirs(resource_dir);
-            for base in &candidates {
-                let python = base
-                    .join("python_dist")
-                    .join("python")
-                    .join("python.exe");
-                if python.exists() {
-                    log::info!("Found Python at: {:?}", python);
-                    return python;
-                }
-            }
-            // Fallback (will fail but provides a meaningful error)
-            let fallback = candidates
-                .first()
-                .cloned()
-                .unwrap_or_default()
+            // Release: python_dist is extracted to the data directory
+            let data_dir = crate::resolve_data_dir();
+            let python = data_dir
                 .join("python_dist")
                 .join("python")
                 .join("python.exe");
-            log::error!("Python not found! Candidates: {:?}", candidates);
-            fallback
+            if python.exists() {
+                log::info!("Found Python at: {:?}", python);
+                return python;
+            }
+
+            // Fallback: try legacy locations (exe dir, resource dir)
+            let candidates = Self::get_candidate_dirs(resource_dir);
+            for base in &candidates {
+                let p = base
+                    .join("python_dist")
+                    .join("python")
+                    .join("python.exe");
+                if p.exists() {
+                    log::info!("Found Python at legacy path: {:?}", p);
+                    return p;
+                }
+            }
+
+            log::error!("Python not found! data_dir={:?}", data_dir);
+            python
         }
     }
 
@@ -133,26 +310,31 @@ impl PythonManager {
                 .map(|p| p.join("python_backend").join("main.py"))
                 .unwrap_or_else(|| PathBuf::from("python_backend/main.py"))
         } else {
-            let candidates = Self::get_candidate_dirs(resource_dir);
-            for base in &candidates {
-                let main_py = base
-                    .join("python_dist")
-                    .join("backend")
-                    .join("main.py");
-                if main_py.exists() {
-                    log::info!("Found backend at: {:?}", main_py);
-                    return main_py;
-                }
-            }
-            let fallback = candidates
-                .first()
-                .cloned()
-                .unwrap_or_default()
+            let data_dir = crate::resolve_data_dir();
+            let main_py = data_dir
                 .join("python_dist")
                 .join("backend")
                 .join("main.py");
-            log::error!("Backend not found! Candidates: {:?}", candidates);
-            fallback
+            if main_py.exists() {
+                log::info!("Found backend at: {:?}", main_py);
+                return main_py;
+            }
+
+            // Fallback: try legacy locations
+            let candidates = Self::get_candidate_dirs(resource_dir);
+            for base in &candidates {
+                let p = base
+                    .join("python_dist")
+                    .join("backend")
+                    .join("main.py");
+                if p.exists() {
+                    log::info!("Found backend at legacy path: {:?}", p);
+                    return p;
+                }
+            }
+
+            log::error!("Backend not found! data_dir={:?}", data_dir);
+            main_py
         }
     }
 

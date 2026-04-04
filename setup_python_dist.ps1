@@ -56,5 +56,22 @@ Write-Host "Installing dependencies..."
 Write-Host "Copying backend code..."
 Copy-Item -Path "$backendSource/*" -Destination $backendDir -Recurse -Force -Exclude "venv", "__pycache__", ".git", ".gitignore"
 
+# 7. Clean up __pycache__ and .pyc to reduce file count
+Write-Host "Cleaning up __pycache__ directories..."
+Get-ChildItem -Path $distDir -Filter "__pycache__" -Recurse -Directory |
+    Remove-Item -Recurse -Force
+
+# 8. Write version marker (used by Rust to detect when re-extraction is needed)
+$appVersion = (Get-Content "$projectRoot/package.json" | ConvertFrom-Json).version
+Set-Content -Path (Join-Path $distDir "VERSION") -Value $appVersion -NoNewline
+Write-Host "Version marker: $appVersion"
+
+# 9. Compress to zip (single file for installer, Rust extracts at first launch)
+$zipOut = Join-Path $projectRoot "src-tauri\python_dist.zip"
+if (Test-Path $zipOut) { Remove-Item $zipOut -Force }
+Write-Host "Compressing python_dist to zip..."
+Compress-Archive -Path "$distDir\*" -DestinationPath $zipOut -CompressionLevel Optimal
+
 Write-Host "Python distribution setup complete!" -ForegroundColor Green
-Write-Host "Distribution is located at: $distDir"
+Write-Host "Zip:  $zipOut"
+Write-Host "Size: $([math]::Round((Get-Item $zipOut).Length / 1MB, 1)) MB"

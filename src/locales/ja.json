@@ -124,6 +124,7 @@
     },
     "python_status": {
         "initializing": "Pythonバックエンドを初期化中...",
+        "extracting": "Python環境をセットアップ中（初回起動）...",
         "retry": "再試行"
     },
     "gpu": {
@@ -150,6 +151,7 @@
         "update_available": "アップデート利用可能: v{{version}}",
         "install_update": "アップデートをインストール",
         "check_updates": "アップデートを確認",
+        "update_check_failed": "アップデートを確認できません。ネットワーク接続を確認するか、後でもう一度お試しください。",
         "about": "について"
     }
 }

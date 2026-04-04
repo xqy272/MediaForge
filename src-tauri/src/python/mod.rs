@@ -2,4 +2,4 @@
 mod ipc;
 mod manager;
 
-pub use manager::PythonManager;
+pub use manager::{ensure_python_extracted, ProgressCallback, PythonManager};
