@@ -14,10 +14,12 @@ import {
     AlertCircle,
     Video,
     FolderOpen,
+    Ban,
 } from 'lucide-react';
 import { cn, getFileName } from '../../lib/utils';
-import { extractFrames, getVideoInfo, onProgress, type ProgressEvent } from '../../lib/python-rpc';
+import { extractFrames, getVideoInfo, onProgress, cancelTask, type ProgressEvent } from '../../lib/python-rpc';
 import { ResultActions } from '../ui';
+import { useFileDrop } from '../../hooks';
 
 type ExtractMode = 'all' | 'interval';
 
@@ -42,6 +44,22 @@ export const VideoToFrames: React.FC = () => {
     const [result, setResult] = useState<{ success: boolean; count?: number; outputDir?: string; error?: string } | null>(null);
 
     const unlistenRef = useRef<(() => void) | null>(null);
+    const taskIdRef = useRef<string>('');
+
+    // Drag-and-drop support
+    const handleVideoReceived = useCallback(async (file: string) => {
+        setInputPath(file);
+        setResult(null);
+        const info = await getVideoInfo(file);
+        if (!info.error) {
+            setVideoInfo(info);
+        }
+    }, []);
+
+    const { isDragging } = useFileDrop({
+        extensions: ['mp4', 'avi', 'mov', 'mkv', 'webm', 'wmv'],
+        onDrop: (paths) => { if (paths.length > 0) handleVideoReceived(paths[0]); },
+    });
 
     useEffect(() => {
         return () => {
@@ -90,16 +108,20 @@ export const VideoToFrames: React.FC = () => {
         setProgress(0);
         setResult(null);
 
+        const taskId = crypto.randomUUID();
+        taskIdRef.current = taskId;
+
         const unlisten = await onProgress((event: ProgressEvent) => {
             setProgress(event.progress * 100);
-        });
+        }, taskId);
         unlistenRef.current = unlisten;
 
         try {
             const processResult = await extractFrames(inputPath, outputDir, {
                 mode,
                 interval: mode === 'interval' ? interval : 1,
-            });
+                task_id: taskId,
+            } as Record<string, unknown>);
             setResult({
                 success: processResult.success,
                 count: processResult.extracted_count,
@@ -112,8 +134,15 @@ export const VideoToFrames: React.FC = () => {
             setIsProcessing(false);
             unlisten();
             unlistenRef.current = null;
+            taskIdRef.current = '';
         }
     }, [inputPath, outputDir, mode, interval]);
+
+    const handleCancel = useCallback(async () => {
+        if (taskIdRef.current) {
+            await cancelTask(taskIdRef.current);
+        }
+    }, []);
 
     const estimatedFrames = videoInfo
         ? mode === 'all'
@@ -164,6 +193,7 @@ export const VideoToFrames: React.FC = () => {
                         className={cn(
                             'border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-all',
                             'hover:border-primary hover:bg-primary/5',
+                            isDragging && 'border-primary bg-primary/10 scale-[1.02]',
                             inputPath ? 'border-primary bg-primary/5' : 'border-border'
                         )}
                     >
@@ -281,28 +311,39 @@ export const VideoToFrames: React.FC = () => {
                         </div>
                     )}
 
-                    {/* Action Button */}
-                    <button
-                        onClick={handleProcess}
-                        disabled={!inputPath || !outputDir || isProcessing}
-                        className={cn(
-                            'w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg font-medium transition-all',
-                            'bg-primary text-primary-foreground hover:bg-primary/90',
-                            'disabled:opacity-50 disabled:cursor-not-allowed'
+                    {/* Action Buttons */}
+                    <div className="flex gap-3">
+                        <button
+                            onClick={handleProcess}
+                            disabled={!inputPath || !outputDir || isProcessing}
+                            className={cn(
+                                'flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg font-medium transition-all',
+                                'bg-primary text-primary-foreground hover:bg-primary/90',
+                                'disabled:opacity-50 disabled:cursor-not-allowed'
+                            )}
+                        >
+                            {isProcessing ? (
+                                <>
+                                    <Loader2 className="w-5 h-5 animate-spin" />
+                                    {t('common.processing')}
+                                </>
+                            ) : (
+                                <>
+                                    <Film className="w-5 h-5" />
+                                    {t('video_to_frames.extract_frames')}
+                                </>
+                            )}
+                        </button>
+                        {isProcessing && (
+                            <button
+                                onClick={handleCancel}
+                                className="px-4 py-3 rounded-lg bg-destructive text-destructive-foreground hover:bg-destructive/90 transition-all"
+                                title={t('common.cancel')}
+                            >
+                                <Ban className="w-5 h-5" />
+                            </button>
                         )}
-                    >
-                        {isProcessing ? (
-                            <>
-                                <Loader2 className="w-5 h-5 animate-spin" />
-                                {t('common.processing')}
-                            </>
-                        ) : (
-                            <>
-                                <Film className="w-5 h-5" />
-                                {t('video_to_frames.extract_frames')}
-                            </>
-                        )}
-                    </button>
+                    </div>
                 </div>
             </div>
         </motion.div>

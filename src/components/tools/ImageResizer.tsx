@@ -19,6 +19,7 @@ import {
 import { cn, getFileName } from '../../lib/utils';
 import { resizeImage, getImageInfo } from '../../lib/python-rpc';
 import { ImagePreview, ResultActions } from '../ui';
+import { useFileDrop } from '../../hooks';
 
 type ResizeMode = 'scale' | 'fixed' | 'fixed_width' | 'fixed_height';
 
@@ -39,6 +40,23 @@ export const ImageResizer: React.FC = () => {
     const [height, setHeight] = useState<number>(600);
     const [isProcessing, setIsProcessing] = useState<boolean>(false);
     const [result, setResult] = useState<{ success: boolean; output_path?: string; error?: string } | null>(null);
+
+    // Drag-and-drop support
+    const handleFileReceived = useCallback(async (file: string) => {
+        setInputPath(file);
+        setResult(null);
+        const info = await getImageInfo(file);
+        if (!info.error) {
+            setImageInfo({ width: info.width, height: info.height, format: info.format });
+            setWidth(info.width);
+            setHeight(info.height);
+        }
+    }, []);
+
+    const { isDragging } = useFileDrop({
+        extensions: ['png', 'jpg', 'jpeg', 'webp', 'bmp', 'gif'],
+        onDrop: (paths) => { if (paths.length > 0) handleFileReceived(paths[0]); },
+    });
 
     const modes = [
         { id: 'scale' as const, icon: Maximize2, label: t('image_resizer.scale_percent') },
@@ -152,6 +170,7 @@ export const ImageResizer: React.FC = () => {
                         className={cn(
                             'border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-all',
                             'hover:border-primary hover:bg-primary/5',
+                            isDragging && 'border-primary bg-primary/10 scale-[1.02]',
                             inputPath ? 'border-primary bg-primary/5' : 'border-border'
                         )}
                     >

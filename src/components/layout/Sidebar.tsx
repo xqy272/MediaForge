@@ -12,6 +12,7 @@ import {
     PanelLeftClose,
     PanelLeftOpen,
     Cpu,
+    Settings,
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { getGpuInfo } from '../../lib/python-rpc';
@@ -32,6 +33,8 @@ interface SidebarProps {
     onToolChange: (tool: ToolKey) => void;
     collapsed: boolean;
     onToggleCollapse: () => void;
+    showSettings: boolean;
+    onOpenSettings: () => void;
 }
 
 const tools: { key: ToolKey; icon: React.ElementType; nameKey: string }[] = [
@@ -43,7 +46,7 @@ const tools: { key: ToolKey; icon: React.ElementType; nameKey: string }[] = [
     { key: 'video-to-gif', icon: FileVideo, nameKey: 'tools.video_to_gif' },
 ];
 
-export const Sidebar: React.FC<SidebarProps> = ({ activeTool, onToolChange, collapsed, onToggleCollapse }) => {
+export const Sidebar: React.FC<SidebarProps> = ({ activeTool, onToolChange, collapsed, onToggleCollapse, showSettings, onOpenSettings }) => {
     const { t } = useTranslation();
     const [gpuProvider, setGpuProvider] = useState<string | null>(null);
 
@@ -109,6 +112,22 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTool, onToolChange, coll
 
             {/* Footer */}
             <div className="p-4 border-t border-border space-y-2">
+                {/* Settings */}
+                <button
+                    onClick={onOpenSettings}
+                    className={cn(
+                        'w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all',
+                        collapsed && 'justify-center px-2',
+                        showSettings
+                            ? 'bg-primary text-primary-foreground'
+                            : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
+                    )}
+                    title={collapsed ? t('settings.title') : undefined}
+                >
+                    <Settings className="w-5 h-5 shrink-0" />
+                    {!collapsed && <span>{t('settings.title')}</span>}
+                </button>
+
                 {/* GPU Status */}
                 {gpuProvider && (
                     <div className={cn(

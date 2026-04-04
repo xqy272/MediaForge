@@ -136,5 +136,20 @@
     "sidebar": {
         "collapse": "收起",
         "expand": "展开"
+    },
+    "settings": {
+        "title": "设置",
+        "description": "配置外观、模型和更新",
+        "appearance": "外观",
+        "models": "AI 模型",
+        "model_ready": "已就绪",
+        "model_not_downloaded": "未下载",
+        "updates": "更新",
+        "current_version": "当前版本",
+        "up_to_date": "已是最新版本！",
+        "update_available": "可用更新: v{{version}}",
+        "install_update": "安装更新",
+        "check_updates": "检查更新",
+        "about": "关于"
     }
 }

@@ -1,0 +1,108 @@
+# MediaForge Release CI/CD
+#
+# Builds and publishes MediaForge when a version tag (v*) is pushed.
+#
+# SETUP REQUIRED (one-time):
+#   1. Generate a Tauri signing keypair:
+#        npx tauri signer generate -w ~/.tauri/mediaforge.key
+#   2. Add the PRIVATE key as a GitHub secret: TAURI_SIGNING_PRIVATE_KEY
+#   3. Add the key password (if any) as:       TAURI_SIGNING_PRIVATE_KEY_PASSWORD
+#   4. Copy the PUBLIC key into src-tauri/tauri.conf.json → plugins.updater.pubkey
+#
+# USAGE:
+#   git tag v0.2.0 && git push origin v0.2.0
+
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: windows-latest
+            target: x86_64-pc-windows-msvc
+            arch: x64
+          # Uncomment to enable macOS / Linux builds:
+          # - platform: macos-latest
+          #   target: aarch64-apple-darwin
+          #   arch: aarch64
+          # - platform: macos-latest
+          #   target: x86_64-apple-darwin
+          #   arch: x64
+          # - platform: ubuntu-22.04
+          #   target: x86_64-unknown-linux-gnu
+          #   arch: x64
+
+    runs-on: ${{ matrix.platform }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+
+      # Linux-only: install system dependencies
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libappindicator3-dev \
+            librsvg2-dev \
+            patchelf
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      # Set up embedded Python distribution (Windows)
+      - name: Setup Python distribution
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          if (Test-Path ./setup_python_dist.ps1) {
+            ./setup_python_dist.ps1
+          } else {
+            Write-Host "setup_python_dist.ps1 not found, skipping"
+          }
+
+      - name: Build Tauri App
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: 'MediaForge ${{ github.ref_name }}'
+          releaseBody: |
+            See the [CHANGELOG](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md) for details.
+          releaseDraft: true
+          prerelease: false
+          args: --target ${{ matrix.target }}
+          includeUpdaterJson: true

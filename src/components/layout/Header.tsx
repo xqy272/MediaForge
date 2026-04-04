@@ -6,6 +6,7 @@ import { type ToolKey, toolNameKeys } from './Sidebar';
 
 interface HeaderProps {
     currentTool: ToolKey;
+    showSettings?: boolean;
 }
 
 const toolDescKeys: Record<ToolKey, string> = {
@@ -17,17 +18,17 @@ const toolDescKeys: Record<ToolKey, string> = {
     'video-to-gif': 'tools.video_to_gif_desc',
 };
 
-export const Header: React.FC<HeaderProps> = ({ currentTool }) => {
+export const Header: React.FC<HeaderProps> = ({ currentTool, showSettings }) => {
     const { t } = useTranslation();
 
     return (
         <header className="h-16 border-b border-border bg-card px-6 flex items-center justify-between transition-theme">
             <div>
                 <h2 className="text-lg font-semibold text-foreground">
-                    {t(toolNameKeys[currentTool])}
+                    {showSettings ? t('settings.title') : t(toolNameKeys[currentTool])}
                 </h2>
                 <p className="text-sm text-muted-foreground">
-                    {t(toolDescKeys[currentTool])}
+                    {showSettings ? t('settings.description') : t(toolDescKeys[currentTool])}
                 </p>
             </div>
 

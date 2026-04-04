@@ -56,6 +56,10 @@ class RpcServer:
         self._executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="rpc-worker")
         self._stdout = sys.stdout  # Capture real stdout at init time
         
+        # Task cancellation support
+        self._cancelled_tasks: set = set()
+        self._cancel_lock = threading.Lock()
+        
         # Methods that should run synchronously on the main thread
         self._sync_methods = {"ping", "shutdown", "get_version"}
         
@@ -110,6 +114,21 @@ class RpcServer:
             "level": level,
             "message": message
         })
+    
+    def cancel_task(self, task_id: str):
+        """Mark a task as cancelled"""
+        with self._cancel_lock:
+            self._cancelled_tasks.add(task_id)
+        logger.info(f"Task cancelled: {task_id}")
+    
+    def is_cancelled(self, task_id: str) -> bool:
+        """Check if a task has been cancelled"""
+        return task_id in self._cancelled_tasks
+    
+    def cleanup_task(self, task_id: str):
+        """Remove task from cancelled set"""
+        with self._cancel_lock:
+            self._cancelled_tasks.discard(task_id)
     
     def _write_message(self, message: Dict[str, Any]):
         """Write a message to stdout (thread-safe)"""

@@ -13,10 +13,12 @@ import {
     Check,
     AlertCircle,
     Video,
+    Ban,
 } from 'lucide-react';
 import { cn, getFileName } from '../../lib/utils';
-import { videoToGif, getVideoInfo, onProgress, type ProgressEvent } from '../../lib/python-rpc';
+import { videoToGif, getVideoInfo, onProgress, cancelTask, type ProgressEvent } from '../../lib/python-rpc';
 import { ResultActions } from '../ui';
+import { useFileDrop } from '../../hooks';
 
 interface VideoInfo {
     total_frames: number;
@@ -39,6 +41,24 @@ export const VideoToGif: React.FC = () => {
     const [result, setResult] = useState<{ success: boolean; outputPath?: string; error?: string } | null>(null);
 
     const unlistenRef = useRef<(() => void) | null>(null);
+    const taskIdRef = useRef<string>('');
+
+    // Drag-and-drop support
+    const handleVideoReceived = useCallback(async (file: string) => {
+        setInputPath(file);
+        setResult(null);
+        const info = await getVideoInfo(file);
+        if (!info.error) {
+            setVideoInfo(info);
+        }
+        const baseName = file.replace(/\.[^.]+$/, '');
+        setOutputPath(`${baseName}.gif`);
+    }, []);
+
+    const { isDragging } = useFileDrop({
+        extensions: ['mp4', 'avi', 'mov', 'mkv', 'webm', 'wmv'],
+        onDrop: (paths) => { if (paths.length > 0) handleVideoReceived(paths[0]); },
+    });
 
     useEffect(() => {
         return () => {
@@ -94,16 +114,20 @@ export const VideoToGif: React.FC = () => {
         setProgress(0);
         setResult(null);
 
+        const taskId = crypto.randomUUID();
+        taskIdRef.current = taskId;
+
         const unlisten = await onProgress((event: ProgressEvent) => {
             setProgress(event.progress * 100);
-        });
+        }, taskId);
         unlistenRef.current = unlisten;
 
         try {
             const processResult = await videoToGif(inputPath, outputPath, {
                 fps,
                 scale: scale / 100,
-            });
+                task_id: taskId,
+            } as Record<string, unknown>);
             setResult({ success: processResult.success, outputPath: processResult.success ? outputPath : undefined, error: processResult.error });
         } catch (e) {
             setResult({ success: false, error: String(e) });
@@ -111,8 +135,15 @@ export const VideoToGif: React.FC = () => {
             setIsProcessing(false);
             unlisten();
             unlistenRef.current = null;
+            taskIdRef.current = '';
         }
     }, [inputPath, outputPath, fps, scale]);
+
+    const handleCancel = useCallback(async () => {
+        if (taskIdRef.current) {
+            await cancelTask(taskIdRef.current);
+        }
+    }, []);
 
     const estimatedSize = videoInfo
         ? Math.round(videoInfo.width * (scale / 100))
@@ -135,6 +166,7 @@ export const VideoToGif: React.FC = () => {
                         className={cn(
                             'border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-all',
                             'hover:border-primary hover:bg-primary/5',
+                            isDragging && 'border-primary bg-primary/10 scale-[1.02]',
                             inputPath ? 'border-primary bg-primary/5' : 'border-border'
                         )}
                     >
@@ -264,28 +296,39 @@ export const VideoToGif: React.FC = () => {
                         </div>
                     )}
 
-                    {/* Action Button */}
-                    <button
-                        onClick={handleProcess}
-                        disabled={!inputPath || !outputPath || isProcessing}
-                        className={cn(
-                            'w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg font-medium transition-all',
-                            'bg-primary text-primary-foreground hover:bg-primary/90',
-                            'disabled:opacity-50 disabled:cursor-not-allowed'
+                    {/* Action Buttons */}
+                    <div className="flex gap-2">
+                        <button
+                            onClick={handleProcess}
+                            disabled={!inputPath || !outputPath || isProcessing}
+                            className={cn(
+                                'flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg font-medium transition-all',
+                                'bg-primary text-primary-foreground hover:bg-primary/90',
+                                'disabled:opacity-50 disabled:cursor-not-allowed'
+                            )}
+                        >
+                            {isProcessing ? (
+                                <>
+                                    <Loader2 className="w-5 h-5 animate-spin" />
+                                    {t('common.processing')}
+                                </>
+                            ) : (
+                                <>
+                                    <FileVideo className="w-5 h-5" />
+                                    {t('video_to_gif.convert_to_gif')}
+                                </>
+                            )}
+                        </button>
+                        {isProcessing && (
+                            <button
+                                onClick={handleCancel}
+                                className="flex items-center justify-center gap-2 px-4 py-3 rounded-lg font-medium transition-all bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                            >
+                                <Ban className="w-5 h-5" />
+                                {t('common.cancel')}
+                            </button>
                         )}
-                    >
-                        {isProcessing ? (
-                            <>
-                                <Loader2 className="w-5 h-5 animate-spin" />
-                                {t('common.processing')}
-                            </>
-                        ) : (
-                            <>
-                                <FileVideo className="w-5 h-5" />
-                                {t('video_to_gif.convert_to_gif')}
-                            </>
-                        )}
-                    </button>
+                    </div>
                 </div>
             </div>
         </motion.div>

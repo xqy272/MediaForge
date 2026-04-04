@@ -136,5 +136,20 @@
     "sidebar": {
         "collapse": "折りたたむ",
         "expand": "展開する"
+    },
+    "settings": {
+        "title": "設定",
+        "description": "外観、モデル、アップデートの設定",
+        "appearance": "外観",
+        "models": "AIモデル",
+        "model_ready": "準備完了",
+        "model_not_downloaded": "未ダウンロード",
+        "updates": "アップデート",
+        "current_version": "現在のバージョン",
+        "up_to_date": "最新バージョンです！",
+        "update_available": "アップデート利用可能: v{{version}}",
+        "install_update": "アップデートをインストール",
+        "check_updates": "アップデートを確認",
+        "about": "について"
     }
 }

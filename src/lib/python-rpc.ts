@@ -140,6 +140,7 @@ export async function removeBackground(
     outputPath?: string,
     options: {
         model_name?: string;
+        task_id?: string;
     } = {}
 ): Promise<RemoveBackgroundResult> {
     return pythonCall<RemoveBackgroundResult>('bg.remove', {
@@ -165,6 +166,7 @@ export async function removeBackgroundBatch(
     outputDir: string,
     options: {
         model_name?: string;
+        task_id?: string;
     } = {}
 ): Promise<RemoveBackgroundBatchResult> {
     return pythonCall<RemoveBackgroundBatchResult>('bg.remove_batch', {
@@ -297,4 +299,24 @@ export async function videoToGif(
  */
 export async function getGpuInfo(): Promise<GpuInfo> {
     return pythonCall<GpuInfo>('gpu.info');
+}
+
+/**
+ * Download a model by name
+ */
+export async function downloadModel(
+    modelName: string,
+    taskId?: string
+): Promise<{ success: boolean; path?: string; already_exists?: boolean; size_mb?: number; error?: string }> {
+    return pythonCall('models.download', {
+        model_name: modelName,
+        task_id: taskId,
+    });
+}
+
+/**
+ * Cancel a running task
+ */
+export async function cancelTask(taskId: string): Promise<{ success: boolean }> {
+    return pythonCall('task.cancel', { task_id: taskId });
 }

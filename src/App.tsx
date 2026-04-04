@@ -2,7 +2,7 @@ import React, { lazy, Suspense } from 'react';
 import { useTranslation } from 'react-i18next';
 import { AnimatePresence } from 'framer-motion';
 import { Loader2 } from 'lucide-react';
-import { MainLayout, type ToolKey } from './components/layout';
+import { MainLayout, Settings, type ToolKey } from './components/layout';
 import { usePython } from './hooks';
 import './lib/i18n';
 
@@ -67,7 +67,7 @@ function App() {
   };
 
   return (
-    <MainLayout>
+    <MainLayout settingsContent={<Settings />}>
       {renderTool}
     </MainLayout>
   );

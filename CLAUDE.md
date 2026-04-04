@@ -77,6 +77,8 @@ MediaForge/
 - **Tauri 2.0** with async commands
 - **tauri-plugin-dialog** for file dialogs
 - **tauri-plugin-opener** for shell integration (`openPath`, `revealItemInDir`)
+- **tauri-plugin-updater** for auto-update (checks GitHub releases)
+- **tauri-plugin-process** for app relaunch after update
 
 ### Python Backend
 - **ONNX Runtime** - Direct AI model inference (U2Net, ISNet, Silueta, RMBG-2.0)
@@ -92,22 +94,23 @@ MediaForge/
 
 ### Layout (`src/components/layout/`)
 - **MainLayout** - Dual-column layout with collapsible sidebar
-- **Sidebar** - Tool navigation (collapsible), GPU status indicator, GitHub link
+- **Sidebar** - Tool navigation (collapsible), GPU status indicator, Settings button, GitHub link
 - **Header** - Tool title/description, language selector, theme toggle
 - **ThemeToggle** - Light/Dark/System theme switcher
 - **LanguageSelector** - Language dropdown (en, zh-CN, ja)
+- **Settings** - Global settings page: appearance, model management, auto-update, about
 
 ### Tool Components (`src/components/tools/`)
-All tools include: image preview, progress bar, result actions (open/reveal/copy), unmount cleanup for event listeners.
+All tools include: image preview, progress bar, result actions (open/reveal/copy), unmount cleanup for event listeners, **drag-and-drop file upload**, **task cancellation**.
 
 | Tool | Features |
 |------|----------|
-| BackgroundRemover | AI mode (6 models) + Chroma key, batch processing |
-| ImageResizer | 4 resize modes: scale, fixed, fixed-width, fixed-height |
-| ImageStitcher | Grid layout with configurable columns and spacing |
-| FormatConverter | PNG/JPEG/WebP/BMP, quality control, batch |
-| VideoToFrames | All frames or interval extraction |
-| VideoToGif | Configurable FPS and scale |
+| BackgroundRemover | AI mode (6 models) + Chroma key, batch processing, drag-drop, cancel |
+| ImageResizer | 4 resize modes: scale, fixed, fixed-width, fixed-height, drag-drop |
+| ImageStitcher | Grid layout with configurable columns and spacing, drag-drop, cancel |
+| FormatConverter | PNG/JPEG/WebP/BMP, quality control, batch, drag-drop, cancel |
+| VideoToFrames | All frames or interval extraction, drag-drop, cancel |
+| VideoToGif | Configurable FPS and scale, drag-drop, cancel |
 
 ## IPC Protocol
 
@@ -138,6 +141,8 @@ Communication between Tauri and Python uses **NDJSON JSON-RPC 2.0** over stdin/s
 | `models.check` | Check model availability |
 | `models.list` | List available models |
 | `models.get_dir` | Get models directory path |
+| `models.download` | Download AI model from remote URL |
+| `task.cancel` | Cancel a running task by task_id |
 | `bg.remove` | AI background removal (single) |
 | `bg.remove_batch` | AI background removal (batch) |
 | `bg.chroma_key` | Color-based background removal |
@@ -166,9 +171,26 @@ npm run tauri dev
 # Build production
 npm run tauri build
 
+# Build via PowerShell script (handles all steps)
+./build.ps1
+
 # Frontend only (for UI development)
 npm run dev
 ```
+
+## CI/CD
+
+GitHub Actions workflow at `.github/workflows/release.yml`:
+- Triggers on tag push (`v*`)
+- Builds Windows installer (NSIS) with auto-updater JSON
+- Creates draft GitHub release with artifacts
+- Requires `TAURI_SIGNING_PRIVATE_KEY` and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` secrets
+
+To generate a signing key pair:
+```bash
+npx tauri signer generate -w ~/.tauri/mediaforge.key
+```
+Set the public key in `src-tauri/tauri.conf.json` → `plugins.updater.pubkey`.
 
 ## Build Targets
 
@@ -191,6 +213,7 @@ MediaForge supports fully portable operation:
 - Props interfaces defined inline or in same file
 - Use `usePython` hook for backend lifecycle
 - Use `pythonCall<T>()` from `python-rpc.ts` for backend calls
+- Use `useFileDrop` hook for native drag-and-drop file support
 - Tool components use `React.lazy` for code splitting
 - All user-facing strings go through `react-i18next` (`t('key')`) — no hardcoded text
 - Event listeners (`onProgress`) must be cleaned up on unmount via `useRef` + `useEffect`
@@ -241,12 +264,33 @@ GPU status is detected at startup via `GpuManager` and displayed in the sidebar 
 - Python stdout is guarded to prevent JSON-RPC protocol corruption
 - Windows Job Objects used to ensure Python process terminates with parent (via ` watchdog.py`)
 
+## Drag and Drop
+
+All tool components support native drag-and-drop file upload via Tauri's `onDragDropEvent` API:
+- `useFileDrop` hook (`src/hooks/useFileDrop.ts`) wraps the window-level drag event
+- Accepts file extension filter and `onDrop` callback
+- Returns `isDragging` state for visual feedback
+- Drop zone highlights when files are dragged over the window
+
+## Task Cancellation
+
+- Frontend generates a `task_id` via `crypto.randomUUID()` and passes it in RPC params
+- Python backend tracks cancelled tasks in `server._cancelled_tasks` set
+- Long-running loops check `server.is_cancelled(task_id)` between iterations
+- Frontend calls `cancelTask(taskId)` → `task.cancel` RPC to request cancellation
+- Cancel button shown during processing in all tool components
+
+## Auto-Update
+
+- Uses `@tauri-apps/plugin-updater` to check GitHub releases for new versions
+- Update endpoint configured in `src-tauri/tauri.conf.json` → `plugins.updater.endpoints`
+- Settings page provides "Check for Updates" and "Install Update" buttons
+- After update download, `@tauri-apps/plugin-process` relaunches the app
+- CI/CD generates `latest.json` manifest alongside installer artifacts
+
 ## Known Limitations / Future Work
 
-- **No drag-and-drop**: File selection uses Tauri native dialogs; actual drag-and-drop is not implemented
-- **No model auto-download**: Users must manually download `.onnx` model files and place them in the models directory
-- **No task cancellation**: Once processing starts, it cannot be canceled from the UI
-- **No auto-update**: Tauri updater plugin not yet integrated
 - **`image.rotate` and `image.rename_batch` RPC methods** exist in backend but have no frontend UI
 - **macOS/Linux** support is planned but untested
 - **No automated tests**: No pytest, Vitest, or Rust `#[cfg(test)]` coverage yet
+- **Updater signing key** must be generated and configured before auto-update works in production

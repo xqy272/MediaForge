@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import List, Optional
 
 from server import server, register_method
-from utils.portable import check_model, list_available_models, get_models_dir
+from utils.portable import check_model, list_available_models, get_models_dir, MODEL_URLS
 
 logger = logging.getLogger('MediaForge.RPC')
 
@@ -129,10 +129,12 @@ def rpc_remove_background(
     alpha_matting_foreground_threshold: int = 240,
     alpha_matting_background_threshold: int = 10,
     alpha_matting_erode_size: int = 10,
+    task_id: Optional[str] = None,
     **kwargs
 ):
     """Remove background from a single image"""
-    task_id = str(uuid.uuid4())
+    if not task_id:
+        task_id = str(uuid.uuid4())
     logger.info(f"bg.remove called: model={model_name}, input={input_path}")
 
     input_path = _validate_path(input_path)
@@ -210,10 +212,12 @@ def rpc_remove_background_batch(
     input_paths: List[str],
     output_dir: str,
     model_name: str = 'u2net',
+    task_id: Optional[str] = None,
     **kwargs
 ):
     """Remove background from multiple images"""
-    task_id = str(uuid.uuid4())
+    if not task_id:
+        task_id = str(uuid.uuid4())
     
     input_paths = [_validate_path(p) for p in input_paths]
     output_dir = _validate_dir(output_dir)
@@ -247,13 +251,33 @@ def rpc_remove_background_batch(
                     "error": f"Failed to load model '{model_name}'"
                 }
 
-        success_count, fail_count = remover.process_batch(
-            input_paths=input_paths,
-            output_dir=output_dir,
-            progress_callback=progress_callback,
-            log_callback=log_callback,
-            **kwargs
-        )
+        # Process each image with cancellation check
+        success_count = 0
+        fail_count = 0
+        for i, path in enumerate(input_paths):
+            if server.is_cancelled(task_id):
+                server.cleanup_task(task_id)
+                return {
+                    "success": False,
+                    "error": "Task cancelled",
+                    "cancelled": True,
+                    "processed_count": success_count,
+                    "failed_count": fail_count
+                }
+            try:
+                ok, _ = remover.remove_background_from_file(
+                    input_path=path,
+                    output_dir=output_dir,
+                    **kwargs
+                )
+                if ok:
+                    success_count += 1
+                else:
+                    fail_count += 1
+            except Exception as e:
+                logger.error(f"Batch item failed: {e}")
+                fail_count += 1
+            progress_callback((i + 1) / len(input_paths))
         
         return {
             "success": True,
@@ -407,10 +431,12 @@ def rpc_extract_frames(
     mode: str = 'all',
     interval: int = 1,
     custom_resolution: Optional[List[int]] = None,
+    task_id: Optional[str] = None,
     **kwargs
 ):
     """Extract frames from video"""
-    task_id = str(uuid.uuid4())
+    if not task_id:
+        task_id = str(uuid.uuid4())
     
     input_path = _validate_path(input_path)
     output_dir = _validate_dir(output_dir)
@@ -458,10 +484,12 @@ def rpc_video_to_gif(
     output_path: str,
     fps: int = 10,
     scale: float = 1.0,
+    task_id: Optional[str] = None,
     **kwargs
 ):
     """Convert video to GIF"""
-    task_id = str(uuid.uuid4())
+    if not task_id:
+        task_id = str(uuid.uuid4())
     
     input_path = _validate_path(input_path)
     output_path = _validate_path(output_path, must_exist=False)
@@ -544,10 +572,12 @@ def rpc_stitch_images(
     output_path: str,
     columns: int = 3,
     spacing: int = 0,
+    task_id: Optional[str] = None,
     **kwargs
 ):
     """Stitch multiple images into a grid"""
-    task_id = str(uuid.uuid4())
+    if not task_id:
+        task_id = str(uuid.uuid4())
     
     input_paths = [_validate_path(p) for p in input_paths]
     output_path = _validate_path(output_path, must_exist=False)
@@ -670,10 +700,12 @@ def rpc_convert_batch(
     output_dir: str,
     target_format: str = 'png',
     quality: int = 95,
+    task_id: Optional[str] = None,
     **kwargs
 ):
     """Convert multiple images to another format"""
-    task_id = str(uuid.uuid4())
+    if not task_id:
+        task_id = str(uuid.uuid4())
     
     input_paths = [_validate_path(p) for p in input_paths]
     output_dir = _validate_dir(output_dir)
@@ -688,6 +720,16 @@ def rpc_convert_batch(
         failed_count = 0
         
         for i, input_path in enumerate(input_paths):
+            if server.is_cancelled(task_id):
+                server.cleanup_task(task_id)
+                return {
+                    "success": False,
+                    "error": "Task cancelled",
+                    "cancelled": True,
+                    "success_count": success_count,
+                    "failed_count": failed_count,
+                    "output_dir": output_dir
+                }
             try:
                 with Image.open(input_path) as img:
                     base_name = os.path.splitext(os.path.basename(input_path))[0]
@@ -816,3 +858,80 @@ def rpc_rename_batch(
     except Exception as e:
         logger.error(f"Batch rename failed: {e}")
         return {"success": False, "error": str(e)}
+
+
+# === Model Download ===
+
+@register_method("models.download")
+def rpc_download_model(model_name: str, task_id: Optional[str] = None, **kwargs):
+    """Download a model from the predefined URL"""
+    import urllib.request
+
+    if not task_id:
+        task_id = str(uuid.uuid4())
+
+    if model_name not in MODEL_URLS:
+        return {"success": False, "error": f"Unknown model: {model_name}"}
+
+    url = MODEL_URLS[model_name]
+    models_dir = get_models_dir()
+    output_path = models_dir / f"{model_name}.onnx"
+
+    if output_path.exists():
+        size_mb = output_path.stat().st_size / (1024 * 1024)
+        return {"success": True, "path": str(output_path), "already_exists": True, "size_mb": round(size_mb, 2)}
+
+    temp_path = str(output_path) + '.tmp'
+
+    try:
+        req = urllib.request.Request(url, headers={'User-Agent': 'MediaForge/1.0'})
+        with urllib.request.urlopen(req, timeout=60) as response:
+            total_size = int(response.headers.get('Content-Length', 0))
+            downloaded = 0
+
+            with open(temp_path, 'wb') as f:
+                while True:
+                    if server.is_cancelled(task_id):
+                        server.cleanup_task(task_id)
+                        f.close()
+                        if os.path.exists(temp_path):
+                            os.remove(temp_path)
+                        return {"success": False, "error": "Download cancelled", "cancelled": True}
+
+                    chunk = response.read(65536)
+                    if not chunk:
+                        break
+                    f.write(chunk)
+                    downloaded += len(chunk)
+                    if total_size > 0:
+                        server.send_progress(task_id, downloaded / total_size)
+
+        import shutil
+        shutil.move(temp_path, str(output_path))
+
+        size_mb = output_path.stat().st_size / (1024 * 1024)
+        server.send_progress(task_id, 1.0)
+
+        return {
+            "success": True,
+            "path": str(output_path),
+            "size_mb": round(size_mb, 2)
+        }
+
+    except Exception as e:
+        if os.path.exists(temp_path):
+            try:
+                os.remove(temp_path)
+            except OSError:
+                pass
+        logger.error(f"Model download failed: {e}")
+        return {"success": False, "error": str(e)}
+
+
+# === Task Cancellation ===
+
+@register_method("task.cancel")
+def rpc_cancel_task(task_id: str, **kwargs):
+    """Cancel a running task"""
+    server.cancel_task(task_id)
+    return {"success": True, "task_id": task_id}

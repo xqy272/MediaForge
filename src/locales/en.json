@@ -136,5 +136,20 @@
     "sidebar": {
         "collapse": "Collapse",
         "expand": "Expand"
+    },
+    "settings": {
+        "title": "Settings",
+        "description": "Configure appearance, models, and updates",
+        "appearance": "Appearance",
+        "models": "AI Models",
+        "model_ready": "Ready",
+        "model_not_downloaded": "Not downloaded",
+        "updates": "Updates",
+        "current_version": "Current version",
+        "up_to_date": "You're up to date!",
+        "update_available": "Update available: v{{version}}",
+        "install_update": "Install Update",
+        "check_updates": "Check for Updates",
+        "about": "About"
     }
 }

@@ -18,6 +18,7 @@ import {
     Sparkles,
     Palette,
     X,
+    Ban,
 } from 'lucide-react';
 import { cn, getFileName } from '../../lib/utils';
 import {
@@ -26,9 +27,11 @@ import {
     chromaKeyRemove,
     checkModel,
     onProgress,
+    cancelTask,
     type ProgressEvent,
 } from '../../lib/python-rpc';
 import { ImagePreview, ResultActions } from '../ui';
+import { useFileDrop } from '../../hooks';
 
 type Mode = 'ai' | 'chromakey';
 
@@ -69,6 +72,16 @@ export const BackgroundRemover: React.FC = () => {
 
     const isBatch = inputPaths.length > 1;
     const unlistenRef = useRef<(() => void) | null>(null);
+    const taskIdRef = useRef<string>('');
+
+    // Drag-and-drop support
+    const { isDragging } = useFileDrop({
+        extensions: ['png', 'jpg', 'jpeg', 'webp', 'bmp'],
+        onDrop: (paths) => {
+            setInputPaths(paths);
+            setResult(null);
+        },
+    });
 
     // Cleanup progress listener on unmount
     useEffect(() => {
@@ -138,10 +151,13 @@ export const BackgroundRemover: React.FC = () => {
         setProgress(0);
         setResult(null);
 
+        const taskId = crypto.randomUUID();
+        taskIdRef.current = taskId;
+
         // Subscribe to progress
         const unlisten = await onProgress((event: ProgressEvent) => {
             setProgress(event.progress * 100);
-        });
+        }, taskId);
         unlistenRef.current = unlisten;
 
         try {
@@ -153,11 +169,13 @@ export const BackgroundRemover: React.FC = () => {
                     const dir = outputDir || inputPaths[0].substring(0, inputPaths[0].lastIndexOf('\\') || inputPaths[0].lastIndexOf('/'));
                     processResult = await removeBackgroundBatch(inputPaths, dir, {
                         model_name: selectedModel,
+                        task_id: taskId,
                     });
                 } else {
                     // Single file mode
                     processResult = await removeBackground(inputPaths[0], undefined, {
                         model_name: selectedModel,
+                        task_id: taskId,
                     });
                 }
             } else {
@@ -204,8 +222,15 @@ export const BackgroundRemover: React.FC = () => {
             setIsProcessing(false);
             unlisten();
             unlistenRef.current = null;
+            taskIdRef.current = '';
         }
     }, [inputPaths, outputDir, mode, selectedModel, isBatch, autoDetect, targetColor, tolerance]);
+
+    const handleCancel = useCallback(async () => {
+        if (taskIdRef.current) {
+            await cancelTask(taskIdRef.current);
+        }
+    }, []);
 
     return (
         <motion.div
@@ -252,6 +277,7 @@ export const BackgroundRemover: React.FC = () => {
                         className={cn(
                             'border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-all',
                             'hover:border-primary hover:bg-primary/5',
+                            isDragging && 'border-primary bg-primary/10 scale-[1.02]',
                             inputPaths.length > 0 ? 'border-primary bg-primary/5' : 'border-border'
                         )}
                     >
@@ -266,7 +292,9 @@ export const BackgroundRemover: React.FC = () => {
                         ) : (
                             <div className="space-y-2">
                                 <Upload className="w-12 h-12 mx-auto text-muted-foreground" />
-                                <p className="text-muted-foreground">{t('common.select_file')}</p>
+                                <p className="text-muted-foreground">
+                                    {isDragging ? t('background_remover.drag_drop_hint') : t('common.select_file')}
+                                </p>
                             </div>
                         )}
                     </div>
@@ -502,7 +530,17 @@ export const BackgroundRemover: React.FC = () => {
                             )}
                         </button>
 
-                        {inputPaths.length > 0 && (
+                        {isProcessing && (
+                            <button
+                                onClick={handleCancel}
+                                className="px-4 py-3 rounded-lg bg-destructive text-destructive-foreground hover:bg-destructive/90 transition-all"
+                                title={t('common.cancel')}
+                            >
+                                <Ban className="w-5 h-5" />
+                            </button>
+                        )}
+
+                        {inputPaths.length > 0 && !isProcessing && (
                             <button
                                 onClick={() => {
                                     setInputPaths([]);
