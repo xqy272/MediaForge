@@ -142,7 +142,7 @@ fn read_version_from_zip(zip_path: &Path) -> Result<String, PythonError> {
     let mut archive = zip::ZipArchive::new(file)
         .map_err(|e| PythonError::ExtractFailed(format!("Invalid zip: {}", e)))?;
 
-    match archive.by_name("VERSION") {
+    let result = match archive.by_name("VERSION") {
         Ok(mut entry) => {
             let mut s = String::new();
             std::io::Read::read_to_string(&mut entry, &mut s)
@@ -150,7 +150,8 @@ fn read_version_from_zip(zip_path: &Path) -> Result<String, PythonError> {
             Ok(s)
         }
         Err(_) => Ok("unknown".to_string()),
-    }
+    };
+    result
 }
 
 /// Extract zip contents to dest, reporting progress
