@@ -2,7 +2,7 @@
  * Video to Frames Tool
  * Extract frames from video files
  */
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { motion } from 'framer-motion';
 import { open } from '@tauri-apps/plugin-dialog';
@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { cn, getFileName } from '../../lib/utils';
 import { extractFrames, getVideoInfo, onProgress, type ProgressEvent } from '../../lib/python-rpc';
+import { ResultActions } from '../ui';
 
 type ExtractMode = 'all' | 'interval';
 
@@ -38,7 +39,18 @@ export const VideoToFrames: React.FC = () => {
     const [interval, setInterval] = useState<number>(10);
     const [isProcessing, setIsProcessing] = useState<boolean>(false);
     const [progress, setProgress] = useState<number>(0);
-    const [result, setResult] = useState<{ success: boolean; count?: number; error?: string } | null>(null);
+    const [result, setResult] = useState<{ success: boolean; count?: number; outputDir?: string; error?: string } | null>(null);
+
+    const unlistenRef = useRef<(() => void) | null>(null);
+
+    useEffect(() => {
+        return () => {
+            if (unlistenRef.current) {
+                unlistenRef.current();
+                unlistenRef.current = null;
+            }
+        };
+    }, []);
 
     const handleSelectFile = useCallback(async () => {
         try {
@@ -81,6 +93,7 @@ export const VideoToFrames: React.FC = () => {
         const unlisten = await onProgress((event: ProgressEvent) => {
             setProgress(event.progress * 100);
         });
+        unlistenRef.current = unlisten;
 
         try {
             const processResult = await extractFrames(inputPath, outputDir, {
@@ -90,6 +103,7 @@ export const VideoToFrames: React.FC = () => {
             setResult({
                 success: processResult.success,
                 count: processResult.extracted_count,
+                outputDir: processResult.success ? outputDir : undefined,
                 error: processResult.error,
             });
         } catch (e) {
@@ -97,6 +111,7 @@ export const VideoToFrames: React.FC = () => {
         } finally {
             setIsProcessing(false);
             unlisten();
+            unlistenRef.current = null;
         }
     }, [inputPath, outputDir, mode, interval]);
 
@@ -247,9 +262,12 @@ export const VideoToFrames: React.FC = () => {
                             {result.success ? (
                                 <>
                                     <Check className="w-5 h-5 text-green-500 shrink-0" />
-                                    <p className="font-medium text-green-600">
-                                        {t('video_to_frames.extracted_count', { count: result.count })}
-                                    </p>
+                                    <div>
+                                        <p className="font-medium text-green-600">
+                                            {t('video_to_frames.extracted_count', { count: result.count })}
+                                        </p>
+                                        <ResultActions outputDir={result.outputDir} />
+                                    </div>
                                 </>
                             ) : (
                                 <>

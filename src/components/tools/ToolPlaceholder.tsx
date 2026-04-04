@@ -26,7 +26,7 @@ export const ToolPlaceholder: React.FC<ToolPlaceholderProps> = ({ toolKey }) => 
                     {t(toolNameKeys[toolKey])}
                 </h3>
                 <p className="text-muted-foreground">
-                    Coming soon...
+                    {t('common.coming_soon')}
                 </p>
             </div>
         </motion.div>

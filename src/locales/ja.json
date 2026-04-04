@@ -55,7 +55,13 @@
         "original": "元のサイズ",
         "new_size": "新しいサイズ",
         "converted_count": "変換済み: {{success}}、失敗: {{failed}}",
-        "convert_to": "{{format}}に変換"
+        "convert_to": "{{format}}に変換",
+        "open_file": "ファイルを開く",
+        "open_in_folder": "フォルダで表示",
+        "copy_path": "パスをコピー",
+        "path_copied": "パスをコピーしました！",
+        "coming_soon": "近日公開...",
+        "preview": "プレビュー"
     },
     "background_remover": {
         "input_image": "入力画像",
@@ -113,6 +119,22 @@
         "not_found": "モデルが見つかりません",
         "download": "ダウンロード",
         "downloading": "ダウンロード中...",
-        "download_hint": "モデルファイルをダウンロードしてmodelsフォルダに配置してください"
+        "download_hint": "モデルファイルをダウンロードしてmodelsフォルダに配置してください",
+        "open_folder": "モデルフォルダを開く"
+    },
+    "python_status": {
+        "initializing": "Pythonバックエンドを初期化中...",
+        "retry": "再試行"
+    },
+    "gpu": {
+        "status": "アクセラレーション",
+        "cuda": "NVIDIA CUDA",
+        "directml": "DirectML",
+        "cpu": "CPU",
+        "unknown": "検出中..."
+    },
+    "sidebar": {
+        "collapse": "折りたたむ",
+        "expand": "展開する"
     }
 }

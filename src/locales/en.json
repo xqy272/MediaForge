@@ -55,7 +55,13 @@
         "original": "Original",
         "new_size": "New Size",
         "converted_count": "Converted: {{success}}, Failed: {{failed}}",
-        "convert_to": "Convert to {{format}}"
+        "convert_to": "Convert to {{format}}",
+        "open_file": "Open File",
+        "open_in_folder": "Show in Folder",
+        "copy_path": "Copy Path",
+        "path_copied": "Path copied!",
+        "coming_soon": "Coming soon...",
+        "preview": "Preview"
     },
     "background_remover": {
         "input_image": "Input Images",
@@ -113,6 +119,22 @@
         "not_found": "Model not found",
         "download": "Download",
         "downloading": "Downloading...",
-        "download_hint": "Please download the model file and place it in the models folder"
+        "download_hint": "Please download the model file and place it in the models folder",
+        "open_folder": "Open models folder"
+    },
+    "python_status": {
+        "initializing": "Python backend initializing...",
+        "retry": "Retry"
+    },
+    "gpu": {
+        "status": "Acceleration",
+        "cuda": "NVIDIA CUDA",
+        "directml": "DirectML",
+        "cpu": "CPU",
+        "unknown": "Detecting..."
+    },
+    "sidebar": {
+        "collapse": "Collapse",
+        "expand": "Expand"
     }
 }

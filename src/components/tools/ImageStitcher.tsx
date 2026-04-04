@@ -2,7 +2,7 @@
  * Image Stitcher Tool
  * Combine multiple images into a grid layout
  */
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { motion } from 'framer-motion';
 import { open, save } from '@tauri-apps/plugin-dialog';
@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { cn, getFileName } from '../../lib/utils';
 import { pythonCall, onProgress, type ProgressEvent } from '../../lib/python-rpc';
+import { ResultActions } from '../ui';
 
 export const ImageStitcher: React.FC = () => {
     const { t } = useTranslation();
@@ -29,7 +30,18 @@ export const ImageStitcher: React.FC = () => {
     const [spacing, setSpacing] = useState<number>(0);
     const [isProcessing, setIsProcessing] = useState<boolean>(false);
     const [progress, setProgress] = useState<number>(0);
-    const [result, setResult] = useState<{ success: boolean; error?: string; info?: string } | null>(null);
+    const [result, setResult] = useState<{ success: boolean; error?: string; info?: string; outputPath?: string } | null>(null);
+
+    const unlistenRef = useRef<(() => void) | null>(null);
+
+    useEffect(() => {
+        return () => {
+            if (unlistenRef.current) {
+                unlistenRef.current();
+                unlistenRef.current = null;
+            }
+        };
+    }, []);
 
     const handleAddImages = useCallback(async () => {
         try {
@@ -83,6 +95,7 @@ export const ImageStitcher: React.FC = () => {
         const unlisten = await onProgress((event: ProgressEvent) => {
             setProgress(event.progress * 100);
         });
+        unlistenRef.current = unlisten;
 
         try {
             const processResult = await pythonCall<{
@@ -100,6 +113,7 @@ export const ImageStitcher: React.FC = () => {
             setResult({
                 success: processResult.success,
                 error: processResult.error,
+                outputPath: processResult.success ? outputPath : undefined,
                 info: processResult.success
                     ? `Grid: ${processResult.grid_size}, Size: ${processResult.canvas_size}`
                     : undefined,
@@ -109,6 +123,7 @@ export const ImageStitcher: React.FC = () => {
         } finally {
             setIsProcessing(false);
             unlisten();
+            unlistenRef.current = null;
         }
     }, [images, outputPath, columns, spacing]);
 
@@ -252,6 +267,7 @@ export const ImageStitcher: React.FC = () => {
                                     <div>
                                         <p className="font-medium text-green-600">{t('common.success')}</p>
                                         {result.info && <p className="text-sm text-muted-foreground mt-1">{result.info}</p>}
+                                        <ResultActions outputPath={result.outputPath} />
                                     </div>
                                 </>
                             ) : (

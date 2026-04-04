@@ -55,7 +55,13 @@
         "original": "原始尺寸",
         "new_size": "新尺寸",
         "converted_count": "已转换: {{success}}，失败: {{failed}}",
-        "convert_to": "转换为 {{format}}"
+        "convert_to": "转换为 {{format}}",
+        "open_file": "打开文件",
+        "open_in_folder": "在文件夹中显示",
+        "copy_path": "复制路径",
+        "path_copied": "路径已复制！",
+        "coming_soon": "即将推出...",
+        "preview": "预览"
     },
     "background_remover": {
         "input_image": "输入图像",
@@ -113,6 +119,22 @@
         "not_found": "模型未找到",
         "download": "下载",
         "downloading": "下载中...",
-        "download_hint": "请下载模型文件并放置到 models 文件夹"
+        "download_hint": "请下载模型文件并放置到 models 文件夹",
+        "open_folder": "打开模型文件夹"
+    },
+    "python_status": {
+        "initializing": "Python 后端正在初始化...",
+        "retry": "重试"
+    },
+    "gpu": {
+        "status": "加速",
+        "cuda": "NVIDIA CUDA",
+        "directml": "DirectML",
+        "cpu": "CPU",
+        "unknown": "检测中..."
+    },
+    "sidebar": {
+        "collapse": "收起",
+        "expand": "展开"
     }
 }

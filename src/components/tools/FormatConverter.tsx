@@ -2,7 +2,7 @@
  * Format Converter Tool
  * Convert images between different formats
  */
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { motion } from 'framer-motion';
 import { open } from '@tauri-apps/plugin-dialog';
@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { pythonCall, onProgress, type ProgressEvent } from '../../lib/python-rpc';
+import { ResultActions } from '../ui';
 
 type TargetFormat = 'png' | 'jpg' | 'webp' | 'bmp';
 
@@ -29,7 +30,18 @@ export const FormatConverter: React.FC = () => {
     const [quality, setQuality] = useState<number>(95);
     const [isProcessing, setIsProcessing] = useState<boolean>(false);
     const [progress, setProgress] = useState<number>(0);
-    const [result, setResult] = useState<{ success: boolean; successCount?: number; failedCount?: number; error?: string } | null>(null);
+    const [result, setResult] = useState<{ success: boolean; successCount?: number; failedCount?: number; outputDir?: string; error?: string } | null>(null);
+
+    const unlistenRef = useRef<(() => void) | null>(null);
+
+    useEffect(() => {
+        return () => {
+            if (unlistenRef.current) {
+                unlistenRef.current();
+                unlistenRef.current = null;
+            }
+        };
+    }, []);
 
     const formats: { id: TargetFormat; name: string; lossy: boolean }[] = [
         { id: 'png', name: 'PNG', lossy: false },
@@ -74,6 +86,7 @@ export const FormatConverter: React.FC = () => {
         const unlisten = await onProgress((event: ProgressEvent) => {
             setProgress(event.progress * 100);
         });
+        unlistenRef.current = unlisten;
 
         try {
             const processResult = await pythonCall<{
@@ -92,6 +105,7 @@ export const FormatConverter: React.FC = () => {
                 success: processResult.success,
                 successCount: processResult.success_count,
                 failedCount: processResult.failed_count,
+                outputDir: outputDir,
                 error: processResult.error,
             });
         } catch (e) {
@@ -99,6 +113,7 @@ export const FormatConverter: React.FC = () => {
         } finally {
             setIsProcessing(false);
             unlisten();
+            unlistenRef.current = null;
         }
     }, [inputFiles, outputDir, targetFormat, quality]);
 
@@ -151,7 +166,7 @@ export const FormatConverter: React.FC = () => {
                         ) : (
                             <div className="space-y-2">
                                 <Upload className="w-12 h-12 mx-auto text-muted-foreground" />
-                                <p className="text-muted-foreground">{t('format_converter.click_to_select')}</p>
+                                <p className="text-muted-foreground">{t('common.select_file')}</p>
                             </div>
                         )}
                     </div>
@@ -226,6 +241,7 @@ export const FormatConverter: React.FC = () => {
                                         <p className="text-sm text-muted-foreground mt-1">
                                             {t('common.converted_count', { success: result.successCount, failed: result.failedCount })}
                                         </p>
+                                        <ResultActions outputDir={result.outputDir} />
                                     </div>
                                 </>
                             ) : (

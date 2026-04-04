@@ -8,10 +8,16 @@ interface MainLayoutProps {
 
 export const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
     const [activeTool, setActiveTool] = useState<ToolKey>('background-remover');
+    const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
     return (
         <div className="flex h-screen bg-background transition-theme">
-            <Sidebar activeTool={activeTool} onToolChange={setActiveTool} />
+            <Sidebar
+                activeTool={activeTool}
+                onToolChange={setActiveTool}
+                collapsed={sidebarCollapsed}
+                onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
+            />
 
             <div className="flex-1 flex flex-col overflow-hidden">
                 <Header currentTool={activeTool} />

@@ -2,7 +2,7 @@
  * Video to GIF Tool
  * Convert video files to animated GIFs
  */
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { motion } from 'framer-motion';
 import { open, save } from '@tauri-apps/plugin-dialog';
@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { cn, getFileName } from '../../lib/utils';
 import { videoToGif, getVideoInfo, onProgress, type ProgressEvent } from '../../lib/python-rpc';
+import { ResultActions } from '../ui';
 
 interface VideoInfo {
     total_frames: number;
@@ -35,7 +36,18 @@ export const VideoToGif: React.FC = () => {
     const [scale, setScale] = useState<number>(100);
     const [isProcessing, setIsProcessing] = useState<boolean>(false);
     const [progress, setProgress] = useState<number>(0);
-    const [result, setResult] = useState<{ success: boolean; error?: string } | null>(null);
+    const [result, setResult] = useState<{ success: boolean; outputPath?: string; error?: string } | null>(null);
+
+    const unlistenRef = useRef<(() => void) | null>(null);
+
+    useEffect(() => {
+        return () => {
+            if (unlistenRef.current) {
+                unlistenRef.current();
+                unlistenRef.current = null;
+            }
+        };
+    }, []);
 
     const handleSelectFile = useCallback(async () => {
         try {
@@ -85,18 +97,20 @@ export const VideoToGif: React.FC = () => {
         const unlisten = await onProgress((event: ProgressEvent) => {
             setProgress(event.progress * 100);
         });
+        unlistenRef.current = unlisten;
 
         try {
             const processResult = await videoToGif(inputPath, outputPath, {
                 fps,
                 scale: scale / 100,
             });
-            setResult({ success: processResult.success, error: processResult.error });
+            setResult({ success: processResult.success, outputPath: processResult.success ? outputPath : undefined, error: processResult.error });
         } catch (e) {
             setResult({ success: false, error: String(e) });
         } finally {
             setIsProcessing(false);
             unlisten();
+            unlistenRef.current = null;
         }
     }, [inputPath, outputPath, fps, scale]);
 
@@ -233,7 +247,10 @@ export const VideoToGif: React.FC = () => {
                             {result.success ? (
                                 <>
                                     <Check className="w-5 h-5 text-green-500 shrink-0" />
-                                    <p className="font-medium text-green-600">{t('video_to_gif.gif_created')}</p>
+                                    <div>
+                                        <p className="font-medium text-green-600">{t('video_to_gif.gif_created')}</p>
+                                        <ResultActions outputPath={result.outputPath} />
+                                    </div>
                                 </>
                             ) : (
                                 <>

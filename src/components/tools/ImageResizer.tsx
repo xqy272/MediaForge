@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { cn, getFileName } from '../../lib/utils';
 import { resizeImage, getImageInfo } from '../../lib/python-rpc';
+import { ImagePreview, ResultActions } from '../ui';
 
 type ResizeMode = 'scale' | 'fixed' | 'fixed_width' | 'fixed_height';
 
@@ -37,7 +38,7 @@ export const ImageResizer: React.FC = () => {
     const [width, setWidth] = useState<number>(800);
     const [height, setHeight] = useState<number>(600);
     const [isProcessing, setIsProcessing] = useState<boolean>(false);
-    const [result, setResult] = useState<{ success: boolean; error?: string } | null>(null);
+    const [result, setResult] = useState<{ success: boolean; output_path?: string; error?: string } | null>(null);
 
     const modes = [
         { id: 'scale' as const, icon: Maximize2, label: t('image_resizer.scale_percent') },
@@ -105,7 +106,7 @@ export const ImageResizer: React.FC = () => {
                 width,
                 height,
             });
-            setResult(processResult);
+            setResult({ success: processResult.success, output_path: processResult.output_path, error: processResult.error });
         } catch (e) {
             setResult({ success: false, error: String(e) });
         } finally {
@@ -167,10 +168,13 @@ export const ImageResizer: React.FC = () => {
                         ) : (
                             <div className="space-y-2">
                                 <Upload className="w-12 h-12 mx-auto text-muted-foreground" />
-                                <p className="text-muted-foreground">{t('image_resizer.drag_drop_hint')}</p>
+                                <p className="text-muted-foreground">{t('common.select_file')}</p>
                             </div>
                         )}
                     </div>
+
+                    {/* Image Preview */}
+                    {inputPath && <ImagePreview filePath={inputPath} maxHeight={160} />}
 
                     {/* Settings */}
                     <div className="space-y-4">
@@ -195,8 +199,9 @@ export const ImageResizer: React.FC = () => {
                                 <label className="text-sm font-medium mb-2 block">{t('common.width')} (px)</label>
                                 <input
                                     type="number"
+                                    min="1"
                                     value={width}
-                                    onChange={(e) => setWidth(Number(e.target.value))}
+                                    onChange={(e) => setWidth(Math.max(1, Number(e.target.value)))}
                                     className="w-full bg-secondary text-foreground rounded-lg px-3 py-2 border border-border"
                                 />
                             </div>
@@ -207,8 +212,9 @@ export const ImageResizer: React.FC = () => {
                                 <label className="text-sm font-medium mb-2 block">{t('common.height')} (px)</label>
                                 <input
                                     type="number"
+                                    min="1"
                                     value={height}
-                                    onChange={(e) => setHeight(Number(e.target.value))}
+                                    onChange={(e) => setHeight(Math.max(1, Number(e.target.value)))}
                                     className="w-full bg-secondary text-foreground rounded-lg px-3 py-2 border border-border"
                                 />
                             </div>
@@ -248,7 +254,10 @@ export const ImageResizer: React.FC = () => {
                             {result.success ? (
                                 <>
                                     <Check className="w-5 h-5 text-green-500 shrink-0" />
-                                    <p className="font-medium text-green-600">{t('common.success')}</p>
+                                    <div>
+                                        <p className="font-medium text-green-600">{t('common.success')}</p>
+                                        <ResultActions outputPath={result.output_path} />
+                                    </div>
                                 </>
                             ) : (
                                 <>

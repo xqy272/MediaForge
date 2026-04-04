@@ -3,7 +3,7 @@
  * AI-powered background removal with optional chroma key mode
  * Supports single and batch processing
  */
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { motion } from 'framer-motion';
 import { open } from '@tauri-apps/plugin-dialog';
@@ -28,6 +28,7 @@ import {
     onProgress,
     type ProgressEvent,
 } from '../../lib/python-rpc';
+import { ImagePreview, ResultActions } from '../ui';
 
 type Mode = 'ai' | 'chromakey';
 
@@ -67,6 +68,17 @@ export const BackgroundRemover: React.FC = () => {
     ];
 
     const isBatch = inputPaths.length > 1;
+    const unlistenRef = useRef<(() => void) | null>(null);
+
+    // Cleanup progress listener on unmount
+    useEffect(() => {
+        return () => {
+            if (unlistenRef.current) {
+                unlistenRef.current();
+                unlistenRef.current = null;
+            }
+        };
+    }, []);
 
     // Select input files (multiple)
     const handleSelectFiles = useCallback(async () => {
@@ -130,6 +142,7 @@ export const BackgroundRemover: React.FC = () => {
         const unlisten = await onProgress((event: ProgressEvent) => {
             setProgress(event.progress * 100);
         });
+        unlistenRef.current = unlisten;
 
         try {
             let processResult: ProcessResult;
@@ -190,6 +203,7 @@ export const BackgroundRemover: React.FC = () => {
         } finally {
             setIsProcessing(false);
             unlisten();
+            unlistenRef.current = null;
         }
     }, [inputPaths, outputDir, mode, selectedModel, isBatch, autoDetect, targetColor, tolerance]);
 
@@ -252,10 +266,15 @@ export const BackgroundRemover: React.FC = () => {
                         ) : (
                             <div className="space-y-2">
                                 <Upload className="w-12 h-12 mx-auto text-muted-foreground" />
-                                <p className="text-muted-foreground">{t('background_remover.drag_drop_hint')}</p>
+                                <p className="text-muted-foreground">{t('common.select_file')}</p>
                             </div>
                         )}
                     </div>
+
+                    {/* Image Preview */}
+                    {inputPaths.length === 1 && (
+                        <ImagePreview filePath={inputPaths[0]} maxHeight={160} />
+                    )}
 
                     {/* File List (show when files selected) */}
                     {inputPaths.length > 0 && (
@@ -331,7 +350,7 @@ export const BackgroundRemover: React.FC = () => {
                                             className="text-primary hover:underline mt-2 inline-flex items-center gap-1"
                                         >
                                             <FolderOpen className="w-4 h-4" />
-                                            Open models folder
+                                            {t('models.open_folder')}
                                         </button>
                                     </div>
                                 </div>
@@ -422,7 +441,10 @@ export const BackgroundRemover: React.FC = () => {
                                     <div>
                                         <p className="font-medium text-green-600">{t('common.success')}</p>
                                         {result.output_path && (
-                                            <p className="text-sm text-muted-foreground mt-1 break-all">{result.output_path}</p>
+                                            <>
+                                                <p className="text-sm text-muted-foreground mt-1 break-all">{result.output_path}</p>
+                                                <ResultActions outputPath={result.output_path} />
+                                            </>
                                         )}
                                         {result.processed_count != null && (
                                             <p className="text-sm text-muted-foreground mt-1">
