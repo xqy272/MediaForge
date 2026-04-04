@@ -35,20 +35,20 @@ if not API_KEY:
 
 prev_tag = subprocess.run(
     ["git", "describe", "--tags", "--abbrev=0", "HEAD"],
-    capture_output=True, text=True
+    capture_output=True, text=True, encoding="utf-8"
 ).stdout.strip()
 
 if prev_tag:
     print(f"Since tag: {prev_tag}", file=sys.stderr)
     git_log = subprocess.run(
         ["git", "log", "--pretty=format:- %s (%h)", f"{prev_tag}..HEAD"],
-        capture_output=True, text=True
+        capture_output=True, text=True, encoding="utf-8"
     ).stdout.strip()
 else:
     print("No previous tag found, using last 30 commits", file=sys.stderr)
     git_log = subprocess.run(
         ["git", "log", "--pretty=format:- %s (%h)", "--max-count=30"],
-        capture_output=True, text=True
+        capture_output=True, text=True, encoding="utf-8"
     ).stdout.strip()
 
 if not git_log:
