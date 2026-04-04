@@ -1,7 +1,7 @@
 # MediaForge Python Backend Dependencies
 
-# AI Background Removal
-rembg>=2.0.50
+# AI Background Removal (direct ONNX Runtime inference, rembg no longer required)
+numpy>=1.24.0
 
 # Image Processing
 Pillow>=10.0.0

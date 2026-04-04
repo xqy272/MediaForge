@@ -22,8 +22,14 @@ class GpuManager:
         """Detect available ONNX Runtime execution providers"""
         try:
             import onnxruntime as ort
+            ort.set_default_logger_severity(3)  # Suppress C++ logs to stdout
             available = ort.get_available_providers()
             logger.info(f"Available ONNX Runtime providers: {available}")
+
+            # Filter out providers that are not suitable for local inference
+            # AzureExecutionProvider requires cloud credentials and can hang
+            excluded = {'AzureExecutionProvider'}
+            available = [p for p in available if p not in excluded]
 
             if 'CUDAExecutionProvider' in available:
                 self._providers = ['CUDAExecutionProvider', 'CPUExecutionProvider']

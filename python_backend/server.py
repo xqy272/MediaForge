@@ -54,6 +54,7 @@ class RpcServer:
         self.running = True
         self._lock = threading.Lock()
         self._executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="rpc-worker")
+        self._stdout = sys.stdout  # Capture real stdout at init time
         
         # Methods that should run synchronously on the main thread
         self._sync_methods = {"ping", "shutdown", "get_version"}
@@ -115,7 +116,13 @@ class RpcServer:
         with self._lock:
             try:
                 json_str = json.dumps(message, ensure_ascii=False)
-                print(json_str, flush=True)
+                # Write directly to the underlying stdout to bypass any guards.
+                # If stdout is wrapped (e.g. _StdoutGuard), write to _real.
+                out = self._stdout
+                if hasattr(out, '_real'):
+                    out = out._real
+                out.write(json_str + '\n')
+                out.flush()
             except BrokenPipeError:
                 # Pipe closed by Tauri, stop the server
                 self.running = False
@@ -163,10 +170,16 @@ class RpcServer:
     
     def _handle_and_respond(self, request_data: Dict[str, Any]):
         """Handle a request and send response (used for threaded execution)"""
+        req_id = request_data.get("id", "N/A")
+        method = request_data.get("method", "unknown")
         try:
+            logger.info(f"Thread handling: method={method}, id={req_id}")
             response = self.handle_request(request_data)
             if response is not None:
                 self._write_message(response.to_dict())
+                logger.info(f"Sent threaded response for method={method}, id={req_id}")
+            else:
+                logger.warning(f"No response for method={method}, id={req_id}")
         except Exception as e:
             logger.error(f"Error in threaded handler: {e}")
             logger.error(traceback.format_exc())
@@ -200,14 +213,18 @@ class RpcServer:
                 try:
                     request_data = json.loads(line)
                     method = request_data.get("method", "")
-                    
+                    req_id = request_data.get("id", "N/A")
+                    logger.info(f"Received RPC: method={method}, id={req_id}")
+
                     # Run sync methods on main thread, others in thread pool
                     if method in self._sync_methods or request_data.get("id") is None:
                         response = self.handle_request(request_data)
                         if response is not None:
                             self._write_message(response.to_dict())
+                            logger.info(f"Sent sync response for id={req_id}")
                     else:
                         self._executor.submit(self._handle_and_respond, request_data)
+                        logger.info(f"Submitted to thread pool: method={method}, id={req_id}")
                         
                 except json.JSONDecodeError as e:
                     logger.error(f"Invalid JSON: {e}")

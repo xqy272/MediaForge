@@ -61,14 +61,14 @@
         "input_image": "入力画像",
         "drag_drop_hint": "ここに画像をドラッグ＆ドロップまたはクリックして選択",
         "model_select": "モデルを選択",
-        "alpha_matting": "アルファマッティング",
-        "alpha_matting_hint": "有効にするとエッジがより滑らかになります",
         "remove_bg": "背景を削除",
         "chroma_key": "クロマキー",
         "chroma_key_mode": "クロマキーモード",
         "target_color": "ターゲットカラー",
         "auto_detect": "自動検出",
-        "tolerance": "許容値"
+        "tolerance": "許容値",
+        "batch_result": "処理済み: {{success}}、失敗: {{failed}}",
+        "output_dir": "出力フォルダ"
     },
     "video_to_frames": {
         "video_file": "動画ファイル",

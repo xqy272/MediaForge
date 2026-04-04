@@ -58,17 +58,17 @@
         "convert_to": "Convert to {{format}}"
     },
     "background_remover": {
-        "input_image": "Input Image",
+        "input_image": "Input Images",
         "drag_drop_hint": "Drag & drop images here or click to select",
         "model_select": "Select Model",
-        "alpha_matting": "Alpha Matting",
-        "alpha_matting_hint": "Enable for smoother edges",
         "remove_bg": "Remove Background",
         "chroma_key": "Chroma Key",
         "chroma_key_mode": "Chroma Key Mode",
         "target_color": "Target Color",
         "auto_detect": "Auto Detect",
-        "tolerance": "Tolerance"
+        "tolerance": "Tolerance",
+        "batch_result": "Processed: {{success}}, Failed: {{failed}}",
+        "output_dir": "Output Folder"
     },
     "video_to_frames": {
         "video_file": "Video File",

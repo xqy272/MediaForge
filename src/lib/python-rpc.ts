@@ -140,15 +140,36 @@ export async function removeBackground(
     outputPath?: string,
     options: {
         model_name?: string;
-        alpha_matting?: boolean;
-        alpha_matting_foreground_threshold?: number;
-        alpha_matting_background_threshold?: number;
-        alpha_matting_erode_size?: number;
     } = {}
 ): Promise<RemoveBackgroundResult> {
     return pythonCall<RemoveBackgroundResult>('bg.remove', {
         input_path: inputPath,
         output_path: outputPath,
+        ...options,
+    });
+}
+
+export interface RemoveBackgroundBatchResult {
+    success: boolean;
+    task_id?: string;
+    processed_count?: number;
+    failed_count?: number;
+    error?: string;
+}
+
+/**
+ * Remove background from multiple images (batch)
+ */
+export async function removeBackgroundBatch(
+    inputPaths: string[],
+    outputDir: string,
+    options: {
+        model_name?: string;
+    } = {}
+): Promise<RemoveBackgroundBatchResult> {
+    return pythonCall<RemoveBackgroundBatchResult>('bg.remove_batch', {
+        input_paths: inputPaths,
+        output_dir: outputDir,
         ...options,
     });
 }

@@ -16,7 +16,7 @@ MediaForge is a modern, cross-platform media processing toolkit built with **Tau
 ├─────────────────────────────────────────────────────────────┤
 │               Python Backend (subprocess)                   │
 │  NDJSON JSON-RPC over stdin/stdout                         │
-│  (rembg, OpenCV, Pillow, ONNX Runtime)                     │
+│  (ONNX Runtime, OpenCV, Pillow, NumPy)                     │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -73,7 +73,7 @@ MediaForge/
 - **tauri-plugin-opener** for shell integration
 
 ### Python Backend
-- **rembg** - AI background removal (U2Net, ISNet, Silueta models)
+- **ONNX Runtime** - Direct AI model inference (U2Net, ISNet, Silueta, RMBG-2.0); rembg no longer used
 - **OpenCV** - Video processing
 - **Pillow** - Image manipulation
 - **ONNX Runtime** - ML inference (CPU/GPU)

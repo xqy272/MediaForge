@@ -61,14 +61,14 @@
         "input_image": "输入图像",
         "drag_drop_hint": "拖拽图像到此处或点击选择",
         "model_select": "选择模型",
-        "alpha_matting": "Alpha 抠图",
-        "alpha_matting_hint": "启用后边缘更平滑",
         "remove_bg": "移除背景",
         "chroma_key": "色度键",
         "chroma_key_mode": "色度键模式",
         "target_color": "目标颜色",
         "auto_detect": "自动检测",
-        "tolerance": "容差"
+        "tolerance": "容差",
+        "batch_result": "已处理: {{success}}，失败: {{failed}}",
+        "output_dir": "输出文件夹"
     },
     "video_to_frames": {
         "video_file": "视频文件",

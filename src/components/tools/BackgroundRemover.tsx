@@ -1,6 +1,7 @@
 /**
  * Background Remover Tool
  * AI-powered background removal with optional chroma key mode
+ * Supports single and batch processing
  */
 import React, { useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -16,10 +17,12 @@ import {
     Image as ImageIcon,
     Sparkles,
     Palette,
+    X,
 } from 'lucide-react';
 import { cn, getFileName } from '../../lib/utils';
 import {
     removeBackground,
+    removeBackgroundBatch,
     chromaKeyRemove,
     checkModel,
     onProgress,
@@ -32,6 +35,8 @@ interface ProcessResult {
     success: boolean;
     output_path?: string;
     error?: string;
+    processed_count?: number;
+    failed_count?: number;
 }
 
 export const BackgroundRemover: React.FC = () => {
@@ -39,9 +44,9 @@ export const BackgroundRemover: React.FC = () => {
 
     // State
     const [mode, setMode] = useState<Mode>('ai');
-    const [inputPath, setInputPath] = useState<string>('');
+    const [inputPaths, setInputPaths] = useState<string[]>([]);
+    const [outputDir, setOutputDir] = useState<string>('');
     const [selectedModel, setSelectedModel] = useState<string>('u2net');
-    const [alphaMatting, setAlphaMatting] = useState<boolean>(false);
     const [isProcessing, setIsProcessing] = useState<boolean>(false);
     const [progress, setProgress] = useState<number>(0);
     const [result, setResult] = useState<ProcessResult | null>(null);
@@ -61,15 +66,18 @@ export const BackgroundRemover: React.FC = () => {
         { id: 'RMBG-2.0', name: 'RMBG-2.0 (BiRefNet)', size: '300MB' },
     ];
 
-    // Select input file
-    const handleSelectFile = useCallback(async () => {
+    const isBatch = inputPaths.length > 1;
+
+    // Select input files (multiple)
+    const handleSelectFiles = useCallback(async () => {
         try {
-            const file = await open({
-                multiple: false,
+            const files = await open({
+                multiple: true,
                 filters: [{ name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'webp', 'bmp'] }],
             });
-            if (file) {
-                setInputPath(file);
+            if (files) {
+                const paths = Array.isArray(files) ? files : [files];
+                setInputPaths(paths);
                 setResult(null);
 
                 // Check model availability
@@ -83,7 +91,22 @@ export const BackgroundRemover: React.FC = () => {
         }
     }, [mode, selectedModel]);
 
+    // Select output directory (for batch mode)
+    const handleSelectOutputDir = useCallback(async () => {
+        try {
+            const dir = await open({ directory: true });
+            if (dir) {
+                setOutputDir(dir as string);
+            }
+        } catch (e) {
+            console.error('Directory selection error:', e);
+        }
+    }, []);
 
+    // Remove a single file from the list
+    const handleRemoveFile = useCallback((index: number) => {
+        setInputPaths(prev => prev.filter((_, i) => i !== index));
+    }, []);
 
     // Open models directory
     const handleOpenModelsDir = useCallback(async () => {
@@ -95,9 +118,9 @@ export const BackgroundRemover: React.FC = () => {
         }
     }, []);
 
-    // Process image
+    // Process image(s)
     const handleProcess = useCallback(async () => {
-        if (!inputPath) return;
+        if (inputPaths.length === 0) return;
 
         setIsProcessing(true);
         setProgress(0);
@@ -112,22 +135,53 @@ export const BackgroundRemover: React.FC = () => {
             let processResult: ProcessResult;
 
             if (mode === 'ai') {
-                processResult = await removeBackground(inputPath, undefined, {
-                    model_name: selectedModel,
-                    alpha_matting: alphaMatting,
-                });
+                if (isBatch) {
+                    // Batch mode: requires output directory
+                    const dir = outputDir || inputPaths[0].substring(0, inputPaths[0].lastIndexOf('\\') || inputPaths[0].lastIndexOf('/'));
+                    processResult = await removeBackgroundBatch(inputPaths, dir, {
+                        model_name: selectedModel,
+                    });
+                } else {
+                    // Single file mode
+                    processResult = await removeBackground(inputPaths[0], undefined, {
+                        model_name: selectedModel,
+                    });
+                }
             } else {
-                // Parse hex color to RGB
+                // Chroma key: process one at a time
                 const hex = targetColor.replace('#', '');
                 const r = parseInt(hex.substring(0, 2), 16);
                 const g = parseInt(hex.substring(2, 4), 16);
                 const b = parseInt(hex.substring(4, 6), 16);
 
-                processResult = await chromaKeyRemove(inputPath, undefined, {
-                    target_color: autoDetect ? undefined : [r, g, b],
-                    auto_detect: autoDetect,
-                    hue_tolerance: tolerance,
-                });
+                if (isBatch) {
+                    let successCount = 0;
+                    let failCount = 0;
+                    for (const path of inputPaths) {
+                        try {
+                            const res = await chromaKeyRemove(path, undefined, {
+                                target_color: autoDetect ? undefined : [r, g, b],
+                                auto_detect: autoDetect,
+                                hue_tolerance: tolerance,
+                            });
+                            if (res.success) successCount++;
+                            else failCount++;
+                        } catch {
+                            failCount++;
+                        }
+                    }
+                    processResult = {
+                        success: failCount === 0,
+                        processed_count: successCount,
+                        failed_count: failCount,
+                    };
+                } else {
+                    processResult = await chromaKeyRemove(inputPaths[0], undefined, {
+                        target_color: autoDetect ? undefined : [r, g, b],
+                        auto_detect: autoDetect,
+                        hue_tolerance: tolerance,
+                    });
+                }
             }
 
             setResult(processResult);
@@ -137,7 +191,7 @@ export const BackgroundRemover: React.FC = () => {
             setIsProcessing(false);
             unlisten();
         }
-    }, [inputPath, mode, selectedModel, alphaMatting, autoDetect, targetColor, tolerance]);
+    }, [inputPaths, outputDir, mode, selectedModel, isBatch, autoDetect, targetColor, tolerance]);
 
     return (
         <motion.div
@@ -180,18 +234,20 @@ export const BackgroundRemover: React.FC = () => {
 
                     {/* Drop Zone */}
                     <div
-                        onClick={handleSelectFile}
+                        onClick={handleSelectFiles}
                         className={cn(
                             'border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-all',
                             'hover:border-primary hover:bg-primary/5',
-                            inputPath ? 'border-primary bg-primary/5' : 'border-border'
+                            inputPaths.length > 0 ? 'border-primary bg-primary/5' : 'border-border'
                         )}
                     >
-                        {inputPath ? (
+                        {inputPaths.length > 0 ? (
                             <div className="space-y-2">
                                 <ImageIcon className="w-12 h-12 mx-auto text-primary" />
-                                <p className="text-sm font-medium truncate">{getFileName(inputPath)}</p>
-                                <p className="text-xs text-muted-foreground">{t('common.select_file')} to change</p>
+                                <p className="text-sm font-medium">
+                                    {t('common.files_selected', { count: inputPaths.length })}
+                                </p>
+                                <p className="text-xs text-muted-foreground">{t('common.click_to_change')}</p>
                             </div>
                         ) : (
                             <div className="space-y-2">
@@ -200,6 +256,50 @@ export const BackgroundRemover: React.FC = () => {
                             </div>
                         )}
                     </div>
+
+                    {/* File List (show when files selected) */}
+                    {inputPaths.length > 0 && (
+                        <div className="max-h-40 overflow-y-auto space-y-1">
+                            {inputPaths.map((path, index) => (
+                                <div
+                                    key={index}
+                                    className="flex items-center gap-2 text-sm bg-secondary/50 rounded-lg px-3 py-1.5"
+                                >
+                                    <ImageIcon className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                                    <span className="truncate flex-1">{getFileName(path)}</span>
+                                    <button
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleRemoveFile(index);
+                                        }}
+                                        className="text-muted-foreground hover:text-destructive shrink-0"
+                                    >
+                                        <X className="w-3.5 h-3.5" />
+                                    </button>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+
+                    {/* Output Directory (for batch mode) */}
+                    {isBatch && mode === 'ai' && (
+                        <div>
+                            <label className="text-sm font-medium mb-2 block">{t('background_remover.output_dir')}</label>
+                            <div
+                                onClick={handleSelectOutputDir}
+                                className={cn(
+                                    'flex items-center gap-2 px-3 py-2 rounded-lg border cursor-pointer transition-all',
+                                    'hover:border-primary',
+                                    outputDir ? 'border-primary bg-primary/5' : 'border-border bg-secondary'
+                                )}
+                            >
+                                <FolderOpen className="w-4 h-4 text-muted-foreground shrink-0" />
+                                <span className="text-sm truncate flex-1">
+                                    {outputDir || t('common.select_output_folder')}
+                                </span>
+                            </div>
+                        </div>
+                    )}
 
                     {/* AI Mode Settings */}
                     {mode === 'ai' && (
@@ -236,19 +336,6 @@ export const BackgroundRemover: React.FC = () => {
                                     </div>
                                 </div>
                             )}
-
-                            <label className="flex items-center gap-3 cursor-pointer">
-                                <input
-                                    type="checkbox"
-                                    checked={alphaMatting}
-                                    onChange={(e) => setAlphaMatting(e.target.checked)}
-                                    className="w-4 h-4 rounded border-border text-primary focus:ring-primary"
-                                />
-                                <div>
-                                    <span className="font-medium">{t('background_remover.alpha_matting')}</span>
-                                    <p className="text-xs text-muted-foreground">{t('background_remover.alpha_matting_hint')}</p>
-                                </div>
-                            </label>
                         </div>
                     )}
 
@@ -334,7 +421,17 @@ export const BackgroundRemover: React.FC = () => {
                                     <Check className="w-5 h-5 text-green-500 shrink-0" />
                                     <div>
                                         <p className="font-medium text-green-600">{t('common.success')}</p>
-                                        <p className="text-sm text-muted-foreground mt-1 break-all">{result.output_path}</p>
+                                        {result.output_path && (
+                                            <p className="text-sm text-muted-foreground mt-1 break-all">{result.output_path}</p>
+                                        )}
+                                        {result.processed_count != null && (
+                                            <p className="text-sm text-muted-foreground mt-1">
+                                                {t('background_remover.batch_result', {
+                                                    success: result.processed_count,
+                                                    failed: result.failed_count ?? 0,
+                                                })}
+                                            </p>
+                                        )}
                                     </div>
                                 </>
                             ) : (
@@ -342,7 +439,17 @@ export const BackgroundRemover: React.FC = () => {
                                     <AlertCircle className="w-5 h-5 text-destructive shrink-0" />
                                     <div>
                                         <p className="font-medium text-destructive">{t('common.error')}</p>
-                                        <p className="text-sm text-muted-foreground mt-1">{result.error}</p>
+                                        {result.error && (
+                                            <p className="text-sm text-muted-foreground mt-1">{result.error}</p>
+                                        )}
+                                        {result.processed_count != null && (
+                                            <p className="text-sm text-muted-foreground mt-1">
+                                                {t('background_remover.batch_result', {
+                                                    success: result.processed_count,
+                                                    failed: result.failed_count ?? 0,
+                                                })}
+                                            </p>
+                                        )}
                                     </div>
                                 </>
                             )}
@@ -353,7 +460,7 @@ export const BackgroundRemover: React.FC = () => {
                     <div className="flex gap-3 pt-4">
                         <button
                             onClick={handleProcess}
-                            disabled={!inputPath || isProcessing || (mode === 'ai' && !!modelStatus && !modelStatus.available)}
+                            disabled={inputPaths.length === 0 || isProcessing || (mode === 'ai' && !!modelStatus && !modelStatus.available)}
                             className={cn(
                                 'flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg font-medium transition-all',
                                 'bg-primary text-primary-foreground hover:bg-primary/90',
@@ -373,10 +480,11 @@ export const BackgroundRemover: React.FC = () => {
                             )}
                         </button>
 
-                        {result?.success && (
+                        {inputPaths.length > 0 && (
                             <button
                                 onClick={() => {
-                                    setInputPath('');
+                                    setInputPaths([]);
+                                    setOutputDir('');
                                     setResult(null);
                                     setProgress(0);
                                 }}

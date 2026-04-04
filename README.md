@@ -9,9 +9,9 @@ A modern, cross-platform media processing toolkit built with Tauri 2.0 + React +
 ## Features
 
 ### 🎨 Background Remover
-- **AI-Powered**: Remove backgrounds using neural networks (U2Net, ISNet, Silueta)
+- **AI-Powered**: Remove backgrounds using neural networks (U2Net, ISNet, Silueta, RMBG-2.0)
 - **Chroma Key**: Remove solid color backgrounds with adjustable tolerance
-- **Alpha Matting**: Smooth edge processing for better quality
+- **Batch Processing**: Process multiple images at once with a shared output folder
 
 ### 🖼️ Image Resizer
 - Multiple resize modes: Scale, Fixed Size, Fixed Width, Fixed Height
@@ -28,7 +28,7 @@ A modern, cross-platform media processing toolkit built with Tauri 2.0 + React +
 |-------|------------|
 | Frontend | React + TypeScript + TailwindCSS v4 |
 | Desktop | Tauri 2.0 (Rust) |
-| AI Backend | Python (rembg, ONNX Runtime) |
+| AI Backend | Python (ONNX Runtime, direct inference) |
 | Video | OpenCV, Pillow |
 
 ## Development

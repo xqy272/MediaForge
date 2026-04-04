@@ -18,6 +18,62 @@ if sys.platform == 'win32':
     sys.stdout.reconfigure(encoding='utf-8')
     sys.stderr.reconfigure(encoding='utf-8')
 
+# --- Suppress ONNX Runtime C++ native logging ---
+# ORT's C++ runtime logs to stdout by default, which corrupts our NDJSON protocol.
+# Must be set BEFORE any onnxruntime import or session creation.
+try:
+    import onnxruntime as ort
+    ort.set_default_logger_severity(3)  # Only Error and Fatal
+except ImportError:
+    pass  # onnxruntime not installed yet
+
+# --- Stdout guard ---
+# Protect stdout from accidental print() calls by third-party libraries.
+# Only valid NDJSON (lines starting with '{') are allowed through.
+import threading
+
+class _StdoutGuard:
+    """Intercepts writes to stdout, only allowing JSON lines through."""
+    def __init__(self, real_stdout):
+        self._real = real_stdout
+        self._lock = threading.Lock()
+        self.encoding = getattr(real_stdout, 'encoding', 'utf-8')
+
+    def write(self, data: str) -> int:
+        if not data or not data.strip():
+            return len(data) if data else 0
+        # Only allow lines that look like JSON (start with '{')
+        for line in data.splitlines(True):
+            stripped = line.strip()
+            if stripped.startswith('{'):
+                with self._lock:
+                    self._real.write(line)
+                    self._real.flush()
+            elif stripped:
+                # Redirect non-JSON output to stderr
+                sys.stderr.write(line)
+        return len(data)
+
+    def flush(self):
+        self._real.flush()
+
+    def fileno(self):
+        return self._real.fileno()
+
+    def isatty(self):
+        return False
+
+    def writable(self):
+        return True
+
+    # Forward reconfigure for compatibility
+    def reconfigure(self, **kwargs):
+        if hasattr(self._real, 'reconfigure'):
+            self._real.reconfigure(**kwargs)
+
+_real_stdout = sys.stdout
+sys.stdout = _StdoutGuard(_real_stdout)
+
 # Add the backend directory to the path for imports
 backend_dir = os.path.dirname(os.path.abspath(__file__))
 if backend_dir not in sys.path:

@@ -133,36 +133,47 @@ def rpc_remove_background(
 ):
     """Remove background from a single image"""
     task_id = str(uuid.uuid4())
-    
+    logger.info(f"bg.remove called: model={model_name}, input={input_path}")
+
     input_path = _validate_path(input_path)
     if output_path:
         output_path = _validate_path(output_path, must_exist=False)
-    
+
     # Check model availability
     model_status = check_model(model_name)
+    logger.info(f"Model check result: {model_status}")
     if not model_status['available']:
         return {
             "success": False,
             "error": f"Model '{model_name}' not found",
             "download_url": model_status.get('download_url')
         }
-    
+
     try:
         def log_callback(msg):
             server.send_log("INFO", msg)
-        
+
         def progress_callback(progress):
             server.send_progress(task_id, progress)
-        
+
         remover = get_background_remover(model_name)
-        
+        logger.info(f"Got remover, is_loaded={remover.is_loaded()}")
+
         # Load model if not loaded
         if not remover.is_loaded():
-            remover.load_model(
+            logger.info("Loading model...")
+            if not remover.load_model(
                 progress_callback=progress_callback,
                 log_callback=log_callback
-            )
-        
+            ):
+                logger.error(f"load_model returned False for '{model_name}'")
+                return {
+                    "success": False,
+                    "error": f"Failed to load model '{model_name}'"
+                }
+            logger.info("Model loaded successfully")
+
+        logger.info("Starting background removal...")
         success, result_path = remover.remove_background_from_file(
             input_path=input_path,
             output_path=output_path,
@@ -173,19 +184,21 @@ def rpc_remove_background(
         )
         
         if not success:
+            logger.error(f"Background removal failed: {result_path}")
             return {
                 "success": False,
                 "error": result_path
             }
-        
+
+        logger.info(f"Background removal complete: {result_path}")
         return {
             "success": True,
             "task_id": task_id,
             "output_path": result_path
         }
-        
+
     except Exception as e:
-        logger.error(f"Background removal failed: {e}")
+        logger.error(f"Background removal failed: {e}", exc_info=True)
         return {
             "success": False,
             "error": str(e)
@@ -222,14 +235,18 @@ def rpc_remove_background_batch(
             server.send_progress(task_id, progress)
         
         remover = get_background_remover(model_name)
-        
+
         # Load model if not loaded
         if not remover.is_loaded():
-            remover.load_model(
+            if not remover.load_model(
                 progress_callback=progress_callback,
                 log_callback=log_callback
-            )
-        
+            ):
+                return {
+                    "success": False,
+                    "error": f"Failed to load model '{model_name}'"
+                }
+
         success_count, fail_count = remover.process_batch(
             input_paths=input_paths,
             output_dir=output_dir,

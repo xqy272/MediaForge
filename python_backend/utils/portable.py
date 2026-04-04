@@ -88,7 +88,7 @@ def get_logs_dir() -> Path:
 
 def setup_portable_environment():
     """Configure environment for portable mode"""
-    # Set U2NET_HOME for rembg
+    # Set U2NET_HOME for model discovery
     models_dir = get_models_dir()
     os.environ['U2NET_HOME'] = str(models_dir)
     logger.info(f"Models directory: {models_dir}")
